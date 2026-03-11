@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# server-side health data files (auto-saved by storage API, keep directory)
+/data/*.json
