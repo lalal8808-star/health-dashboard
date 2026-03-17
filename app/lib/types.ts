@@ -24,60 +24,9 @@ export interface AnalysisRecord {
   createdAt: string;
   imageFileName: string;
   metrics: HealthMetrics;
-  exerciseGuide: ExerciseGuide | null;
-  dietGuide: DietGuide | null;
+  exerciseGuide: null;
+  dietGuide: null;
   rawOcrText?: string;
-}
-
-export interface ExerciseRoutine {
-  name: string;
-  type: 'HIIT' | 'strength' | 'cardio' | 'flexibility' | 'recovery';
-  description: string;
-  duration: string;
-  sets?: number;
-  reps?: string;
-  intensity: 'low' | 'moderate' | 'high';
-  icon: string;
-}
-
-export interface ExerciseGuide {
-  summary: string;
-  weeklyPlan: WeeklyPlan[];
-  routines: ExerciseRoutine[];
-  tips: string[];
-}
-
-export interface WeeklyPlan {
-  day: string;
-  focus: string;
-  routines: string[];
-}
-
-export interface MealSuggestion {
-  name: string;
-  description: string;
-  calories: number;
-  protein: number;  // g
-  carbs: number;    // g
-  fat: number;      // g
-}
-
-export interface DietGuide {
-  summary: string;
-  dailyCalories: number;
-  macroRatio: {
-    protein: number;  // %
-    carbs: number;    // %
-    fat: number;      // %
-  };
-  meals: {
-    breakfast: MealSuggestion[];
-    lunch: MealSuggestion[];
-    dinner: MealSuggestion[];
-    snack: MealSuggestion[];
-  };
-  tips: string[];
-  supplements: string[];
 }
 
 export interface ChartDataPoint {
@@ -122,6 +71,17 @@ export interface MealPresetEntry {
   fat: number;
 }
 
+export interface FoodItem {
+  id: string;
+  name: string;
+  description: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  createdAt: string;
+}
+
 export interface MealPreset {
   id: string;
   name: string;              // 프리셋 이름 (예: "닭가슴살 런치")
@@ -149,4 +109,12 @@ export interface WorkoutLog {
   entries: WorkoutEntry[];
 }
 
-export type TabType = 'dashboard' | 'upload' | 'history' | 'workout-diary' | 'food-diary' | 'compare';
+// Chat
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
+
+export type TabType = 'dashboard' | 'upload' | 'history' | 'workout-diary' | 'food-diary' | 'compare' | 'chat';

@@ -13,6 +13,7 @@ const SYNC_KEYS = [
     'health-dashboard-workout-logs',
     'health-dashboard-food-logs',
     'health-dashboard-meal-presets',
+    'health-dashboard-food-items',
 ] as const;
 
 export type SyncKey = typeof SYNC_KEYS[number];

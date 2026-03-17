@@ -9,6 +9,7 @@ import {
     Activity,
     BookOpen,
     GitCompareArrows,
+    MessageCircle,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -26,6 +27,7 @@ const navItems: { id: TabType; label: string; icon: React.ReactNode; }[] = [
     { id: 'compare', label: '비교 분석', icon: <GitCompareArrows size={20} /> },
     { id: 'workout-diary', label: '운동 일지', icon: <Dumbbell size={20} /> },
     { id: 'food-diary', label: '식단 일지', icon: <BookOpen size={20} /> },
+    { id: 'chat', label: 'AI 코치', icon: <MessageCircle size={20} /> },
 ];
 
 export default function Sidebar({ activeTab, onTabChange, recordCount, isOpen, onClose }: SidebarProps) {

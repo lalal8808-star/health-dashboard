@@ -15,6 +15,7 @@ import ImageUploader from '@/app/components/ImageUploader';
 import WorkoutDiary from '@/app/components/WorkoutDiary';
 import AnalysisHistory from '@/app/components/AnalysisHistory';
 import StorageSync from '@/app/components/StorageSync';
+import DietChatbot from '@/app/components/DietChatbot';
 import {
   getRecords,
   saveRecord,
@@ -24,7 +25,7 @@ import {
   generateId,
 } from '@/app/lib/storage';
 import { parseInBodyCSV, CSVParseResult } from '@/app/lib/csv-parser';
-import { sampleRecords, sampleExerciseGuide, sampleDietGuide } from '@/app/lib/sample-data';
+import { sampleRecords } from '@/app/lib/sample-data';
 import { TabType, AnalysisRecord, HealthMetrics, ChartDataPoint } from '@/app/lib/types';
 
 const TAB_HEADERS: Record<TabType, { title: string; subtitle: string }> = {
@@ -34,6 +35,7 @@ const TAB_HEADERS: Record<TabType, { title: string; subtitle: string }> = {
   compare: { title: '비교 분석', subtitle: '두 날짜의 건강 지표를 비교합니다' },
   'workout-diary': { title: '운동 일지', subtitle: '일별 운동을 기록하고 관리하세요' },
   'food-diary': { title: '식단 일지', subtitle: '일별 식단을 기록하고 관리하세요' },
+  chat: { title: 'AI 코치', subtitle: '체성분·식단·운동 데이터 기반 맞춤 다이어트 코칭' },
 };
 
 export default function Home() {
@@ -89,23 +91,7 @@ export default function Home() {
       setProgress(50);
       setProgressMessage('건강 지표를 추출했습니다. 맞춤 가이드를 생성 중...');
 
-      // Step 2: Generate recommendations
-      setProgress(60);
-      const recommendRes = await fetch('/api/recommend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ metrics: extractedMetrics }),
-      });
-
-      let exerciseGuide = sampleExerciseGuide;
-      let dietGuide = sampleDietGuide;
-
-      if (recommendRes.ok) {
-        const guides = await recommendRes.json();
-        if (guides.exerciseGuide) exerciseGuide = guides.exerciseGuide;
-        if (guides.dietGuide) dietGuide = guides.dietGuide;
-      }
-
+      // Step 2: Saved as simple record (Recommendations are now handled via manual diary)
       setProgress(80);
       setProgressMessage('분석 결과를 저장하는 중...');
 
@@ -134,8 +120,8 @@ export default function Home() {
           inbodyScore: extractedMetrics.inbodyScore || null,
           notes: extractedMetrics.notes || '',
         },
-        exerciseGuide,
-        dietGuide,
+        exerciseGuide: null,
+        dietGuide: null,
         rawOcrText,
       };
 
@@ -336,6 +322,11 @@ export default function Home() {
         {/* Food Diary View */}
         {activeTab === 'food-diary' && (
           <FoodDiary onGoToUpload={() => setActiveTab('upload')} />
+        )}
+
+        {/* AI Coach Chat View */}
+        {activeTab === 'chat' && (
+          <DietChatbot />
         )}
       </main>
     </div>

@@ -2,10 +2,11 @@
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, Cell, ResponsiveContainer } from 'recharts';
-import { FoodEntry, DailyFoodLog, MealPreset } from '@/app/lib/types';
+import { FoodEntry, DailyFoodLog, MealPreset, FoodItem } from '@/app/lib/types';
 import {
     getFoodLogs, getFoodLogByDate, saveFoodEntry, deleteFoodEntry, getTotalCalories,
     getMealPresets, saveMealPreset, deleteMealPreset, loadPresetToDate,
+    getFoodItems, saveFoodItem, searchFoodItems,
 } from '@/app/lib/food-storage';
 import { getLatestRecord } from '@/app/lib/storage';
 import {
@@ -57,6 +58,11 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
     // savingPreset: which meal is being saved → shows inline name input
     const [savingMeal, setSavingMeal] = useState<MealKey | null>(null);
     const [presetName, setPresetName] = useState('');
+    // 음식 검색
+    const [foodSearch, setFoodSearch] = useState('');
+    const [showFoodSearch, setShowFoodSearch] = useState(false);
+    const [foodItems, setFoodItems] = useState<FoodItem[]>(() => getFoodItems());
+    const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isProcessingRef = useRef(false);
 
@@ -156,21 +162,55 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
     const handleManualAdd = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
+        const name = (fd.get('name') as string).trim();
+        const description = (fd.get('description') as string).trim();
+        const calories = Number(fd.get('calories')) || 0;
+        const protein = Number(fd.get('protein')) || 0;
+        const carbs = Number(fd.get('carbs')) || 0;
+        const fat = Number(fd.get('fat')) || 0;
+
+        if (!name) return;
+
         const entry: FoodEntry = {
             id: `food-${Date.now()}`,
             time: (fd.get('time') as string) || new Date().toTimeString().slice(0, 5),
             meal: selectedMeal,
-            name: fd.get('name') as string,
-            description: fd.get('description') as string,
-            calories: Number(fd.get('calories')) || 0,
-            protein: Number(fd.get('protein')) || 0,
-            carbs: Number(fd.get('carbs')) || 0,
-            fat: Number(fd.get('fat')) || 0,
+            name,
+            description,
+            calories,
+            protein,
+            carbs,
+            fat,
         };
         saveFoodEntry(selectedDate, entry, bmrInfo.targetCalories);
+
+        // 새로운 음식을 데이터베이스에 저장할지 물어보지 않고, 선택한 음식이 있으면 업데이트
+        if (!selectedFood && name && (calories > 0 || protein > 0 || carbs > 0 || fat > 0)) {
+            const newFood: FoodItem = {
+                id: `food-${Date.now()}`,
+                name,
+                description,
+                calories,
+                protein,
+                carbs,
+                fat,
+                createdAt: new Date().toISOString(),
+            };
+            saveFoodItem(newFood);
+            setFoodItems(getFoodItems());
+        }
+
         refreshLog(selectedDate);
         setShowManualForm(false);
+        setSelectedFood(null);
+        setFoodSearch('');
         e.currentTarget.reset();
+    };
+
+    const handleSelectFood = (food: FoodItem) => {
+        setSelectedFood(food);
+        setFoodSearch('');
+        setShowFoodSearch(false);
     };
 
     const handleDelete = (entryId: string) => { deleteFoodEntry(selectedDate, entryId); refreshLog(selectedDate); };
@@ -505,10 +545,86 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
             {/* 직접 입력 폼 */}
             {showManualForm && (
                 <form onSubmit={handleManualAdd} className="chart-card" style={{ marginBottom: '24px' }}>
+                    {/* 음식 검색/선택 */}
+                    <div style={{ marginBottom: '16px' }}>
+                        <label style={labelStyle}>🔍 음식 검색 (선택 사항)</label>
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                type="text"
+                                value={foodSearch}
+                                onChange={e => { setFoodSearch(e.target.value); setShowFoodSearch(true); }}
+                                onFocus={() => setShowFoodSearch(true)}
+                                style={inputStyle}
+                                placeholder="콜라, 피자, 닭가슴살 등..."
+                            />
+                            {showFoodSearch && foodSearch && (
+                                <div style={{
+                                    position: 'absolute', top: '100%', left: 0, right: 0,
+                                    background: 'var(--bg-secondary)', border: '1px solid var(--border-glass)',
+                                    borderRadius: '8px', marginTop: '4px', maxHeight: '200px', overflow: 'auto',
+                                    zIndex: 10,
+                                }}>
+                                    {searchFoodItems(foodSearch).slice(0, 8).map(item => (
+                                        <div
+                                            key={item.id}
+                                            onClick={() => handleSelectFood(item)}
+                                            style={{
+                                                padding: '10px 12px', borderBottom: '1px solid var(--border-glass)',
+                                                cursor: 'pointer', transition: 'background 0.15s',
+                                            }}
+                                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-tertiary)'; }}
+                                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                        >
+                                            <div style={{ fontWeight: 600, fontSize: '13px' }}>{item.name}</div>
+                                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                                                {item.calories}kcal · 단{item.protein}g 탄{item.carbs}g 지{item.fat}g
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {searchFoodItems(foodSearch).length === 0 && (
+                                        <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                                            해당 음식이 없습니다. 아래에서 직접 입력하세요.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        {selectedFood && (
+                            <div style={{
+                                marginTop: '8px', padding: '10px 12px', borderRadius: '8px',
+                                background: 'rgba(16,185,129,0.15)', border: '1px solid var(--border-glass)',
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 600, fontSize: '13px' }}>✓ {selectedFood.name}</div>
+                                        <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                                            {selectedFood.calories}kcal · 단{selectedFood.protein}g 탄{selectedFood.carbs}g 지{selectedFood.fat}g
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedFood(null)}
+                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '16px' }}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 기본 정보 입력 */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                         <div>
                             <label style={labelStyle}>음식 이름 *</label>
-                            <input name="name" required style={inputStyle} placeholder="예: 닭가슴살 샐러드" autoFocus />
+                            <input
+                                name="name"
+                                required
+                                style={inputStyle}
+                                placeholder="예: 닭가슴살 샐러드"
+                                defaultValue={selectedFood?.name || ''}
+                                autoFocus
+                            />
                         </div>
                         <div>
                             <label style={labelStyle}>시간</label>
@@ -516,16 +632,21 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
                         </div>
                         <div style={{ gridColumn: '1 / -1' }}>
                             <label style={labelStyle}>설명</label>
-                            <input name="description" style={inputStyle} placeholder="예: 닭가슴살 200g + 야채 + 드레싱" />
+                            <input
+                                name="description"
+                                style={inputStyle}
+                                placeholder="예: 닭가슴살 200g + 야채 + 드레싱"
+                                defaultValue={selectedFood?.description || ''}
+                            />
                         </div>
-                        <div><label style={labelStyle}>칼로리 (kcal)</label><input name="calories" type="number" style={inputStyle} placeholder="450" /></div>
-                        <div><label style={labelStyle}>단백질 (g)</label><input name="protein" type="number" style={inputStyle} placeholder="35" /></div>
-                        <div><label style={labelStyle}>탄수화물 (g)</label><input name="carbs" type="number" style={inputStyle} placeholder="40" /></div>
-                        <div><label style={labelStyle}>지방 (g)</label><input name="fat" type="number" style={inputStyle} placeholder="15" /></div>
+                        <div><label style={labelStyle}>칼로리 (kcal)</label><input name="calories" type="number" style={inputStyle} placeholder="450" defaultValue={selectedFood?.calories || ''} /></div>
+                        <div><label style={labelStyle}>단백질 (g)</label><input name="protein" type="number" style={inputStyle} placeholder="35" defaultValue={selectedFood?.protein || ''} /></div>
+                        <div><label style={labelStyle}>탄수화물 (g)</label><input name="carbs" type="number" style={inputStyle} placeholder="40" defaultValue={selectedFood?.carbs || ''} /></div>
+                        <div><label style={labelStyle}>지방 (g)</label><input name="fat" type="number" style={inputStyle} placeholder="15" defaultValue={selectedFood?.fat || ''} /></div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                         <button type="submit" className="btn btn-primary btn-sm">저장</button>
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowManualForm(false)}>취소</button>
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setShowManualForm(false); setSelectedFood(null); }}>취소</button>
                     </div>
                 </form>
             )}

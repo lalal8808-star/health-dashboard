@@ -67,33 +67,33 @@ export default function CompareAnalysis({ records }: CompareAnalysisProps) {
     const radarData = [
         {
             subject: '체중',
-            A: toScoreInv(left.weight, 50, 100),       // 낮을수록 점수 높음
-            B: toScoreInv(right.weight, 50, 100),
+            A: toScoreInv(left.weight, 40, 120),       // Wider range for better balance
+            B: toScoreInv(right.weight, 40, 120),
         },
         {
             subject: '골격근량',
-            A: toScore(left.skeletalMuscle, 15, 50),   // 높을수록 점수 높음
-            B: toScore(right.skeletalMuscle, 15, 50),
+            A: toScore(left.skeletalMuscle, 15, 60),
+            B: toScore(right.skeletalMuscle, 15, 60),
         },
         {
             subject: '체지방량',
-            A: toScoreInv(left.bodyFatMass, 5, 35),    // 낮을수록 점수 높음
-            B: toScoreInv(right.bodyFatMass, 5, 35),
+            A: toScoreInv(left.bodyFatMass, 0, 50),    // Adjusted as requested to make hexagon look better
+            B: toScoreInv(right.bodyFatMass, 0, 50),
         },
         {
             subject: 'BMI',
-            A: toScoreInv(left.bmi, 15, 35),           // 낮을수록 점수 높음
-            B: toScoreInv(right.bmi, 15, 35),
+            A: toScoreInv(left.bmi, 10, 45),
+            B: toScoreInv(right.bmi, 10, 45),
         },
         {
             subject: '인바디 점수',
-            A: left.inbodyScore != null && left.inbodyScore > 0 ? left.inbodyScore : 50,  // 높을수록 점수 높음
+            A: left.inbodyScore != null && left.inbodyScore > 0 ? left.inbodyScore : 50,
             B: right.inbodyScore != null && right.inbodyScore > 0 ? right.inbodyScore : 50,
         },
         {
             subject: '기초대사량',
-            A: toScore(left.basalMetabolicRate, 1000, 2200),  // 높을수록 점수 높음
-            B: toScore(right.basalMetabolicRate, 1000, 2200),
+            A: toScore(left.basalMetabolicRate, 800, 2500),
+            B: toScore(right.basalMetabolicRate, 800, 2500),
         },
     ];
 
