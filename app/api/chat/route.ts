@@ -166,21 +166,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ response: responseText });
     } catch (error: any) {
         console.error('Chat error:', error);
-
-        if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota')) {
-            return NextResponse.json({
-                error: 'API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.'
-            }, { status: 429 });
-        }
-
-        if (error?.status === 404 || error?.message?.includes('not found') || error?.message?.includes('404')) {
-            return NextResponse.json({
-                error: '모델을 찾을 수 없습니다. (gemini-3.1-pro-preview) — 아직 출시되지 않았거나 API 키에서 접근이 불가할 수 있습니다.'
-            }, { status: 404 });
-        }
-
+        const msg = error?.message || error?.toString() || '알 수 없는 오류';
         return NextResponse.json(
-            { error: '응답 생성 중 오류가 발생했습니다. (' + (error?.message || '알 수 없는 오류') + ')' },
+            { error: `AI 응답 오류: ${msg}` },
             { status: 500 }
         );
     }
