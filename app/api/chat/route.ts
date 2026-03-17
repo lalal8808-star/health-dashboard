@@ -173,6 +173,12 @@ export async function POST(request: NextRequest) {
             }, { status: 429 });
         }
 
+        if (error?.status === 404 || error?.message?.includes('not found') || error?.message?.includes('404')) {
+            return NextResponse.json({
+                error: '모델을 찾을 수 없습니다. (gemini-3.1-pro-preview) — 아직 출시되지 않았거나 API 키에서 접근이 불가할 수 있습니다.'
+            }, { status: 404 });
+        }
+
         return NextResponse.json(
             { error: '응답 생성 중 오류가 발생했습니다. (' + (error?.message || '알 수 없는 오류') + ')' },
             { status: 500 }
