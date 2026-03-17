@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-3.1-pro-preview' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-pro-latest' });
 
         // Build context from health data
         const contextMessage = buildContextMessage(healthData);

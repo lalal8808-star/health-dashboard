@@ -1,6 +1,7 @@
 'use client';
 
 import { ChatMessage } from './types';
+import { syncedSetItem } from './storage-sync';
 
 const CHAT_STORAGE_KEY = 'health-dashboard-chat-messages' as const;
 
@@ -17,9 +18,10 @@ export function getChatMessages(): ChatMessage[] {
 export function saveChatMessage(message: ChatMessage): void {
     const messages = getChatMessages();
     messages.push(message);
-    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+    syncedSetItem(CHAT_STORAGE_KEY, messages);
 }
 
 export function clearChatMessages(): void {
     localStorage.removeItem(CHAT_STORAGE_KEY);
+    syncedSetItem(CHAT_STORAGE_KEY, []);
 }
