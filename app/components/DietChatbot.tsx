@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Trash2, Bot, User, Loader2, Mic, MicOff } from 'lucide-react';
+import { Send, Trash2, Bot, User, Loader2, Mic, MicOff, StopCircle } from 'lucide-react';
 import { ChatMessage } from '@/app/lib/types';
 import { getChatMessages, saveChatMessage, clearChatMessages } from '@/app/lib/chat-storage';
 import { getRecords } from '@/app/lib/storage';
@@ -32,26 +32,71 @@ declare global {
     }
 }
 
-export default function DietChatbot() {
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
+// ── Module-level state (persists across tab navigations) ──────────────────────
+let _messages: ChatMessage[] = [];
+let _isStreaming = false;
+let _abortController: AbortController | null = null;
+const _listeners = new Set<() => void>();
+
+function _notify() { _listeners.forEach(fn => fn()); }
+
+function _subscribe(fn: () => void) {
+    _listeners.add(fn);
+    return () => { _listeners.delete(fn); };
+}
+
+function _init() {
+    if (_messages.length === 0) {
+        _messages = getChatMessages();
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface DietChatbotProps {
+    /** StorageSync 완료 시 버전 증가 → 새 기기에서 메시지 다시 로드 */
+    syncVersion?: number;
+}
+
+export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
+    const [tick, setTick] = useState(0);
     const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [micAvailable, setMicAvailable] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
+    // Force re-render when module state changes
     useEffect(() => {
-        setMessages(getChatMessages());
-        // Check Speech API availability
+        _init();
+        setTick(n => n + 1);
+        return _subscribe(() => setTick(n => n + 1));
+    }, []);
+
+    // StorageSync 완료 후: localStorage(=서버와 병합된 결과)로 모듈 상태 갱신
+    useEffect(() => {
+        if (syncVersion > 0 && !_isStreaming) {
+            try {
+                const synced = getChatMessages();
+                // 스마트 병합: ID 기준으로 합치기 (syncFromServer가 이미 병합해놓은 결과)
+                if (synced.length !== _messages.length) {
+                    _messages = synced;
+                    _notify();
+                }
+            } catch {
+                // 안전 무시
+            }
+        }
+    }, [syncVersion]);
+
+    useEffect(() => {
         const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
         setMicAvailable(!!SR);
     }, []);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+    }, [tick]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setInput(e.target.value);
@@ -68,7 +113,10 @@ export default function DietChatbot() {
 
     const handleSend = async (textOverride?: string) => {
         const text = (textOverride ?? input).trim();
-        if (!text || isLoading) return;
+        if (!text || _isStreaming) return;
+
+        // Snapshot history before adding new messages
+        const historyForAPI = _messages.map(m => ({ role: m.role, content: m.content }));
 
         const userMsg: ChatMessage = {
             id: `chat-${Date.now()}-user`,
@@ -77,46 +125,88 @@ export default function DietChatbot() {
             createdAt: new Date().toISOString(),
         };
         saveChatMessage(userMsg);
-        setMessages(prev => [...prev, userMsg]);
+
+        const assistantMsgId = `chat-${Date.now() + 1}-assistant`;
+        const assistantPlaceholder: ChatMessage = {
+            id: assistantMsgId,
+            role: 'assistant',
+            content: '',
+            createdAt: new Date().toISOString(),
+        };
+
+        _messages = [..._messages, userMsg, assistantPlaceholder];
+        _isStreaming = true;
+        _abortController = new AbortController();
+        _notify();
+
         setInput('');
         if (textareaRef.current) textareaRef.current.style.height = 'auto';
-        setIsLoading(true);
 
         try {
             const healthData = gatherHealthData();
-            const history = getChatMessages()
-                .slice(0, -1)
-                .map(m => ({ role: m.role, content: m.content }));
 
             const res = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text, history, healthData }),
+                body: JSON.stringify({ message: text, history: historyForAPI, healthData }),
+                signal: _abortController.signal,
             });
 
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || '응답 생성에 실패했습니다.');
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(errorText || '응답 생성에 실패했습니다.');
+            }
 
-            const assistantMsg: ChatMessage = {
-                id: `chat-${Date.now()}-assistant`,
-                role: 'assistant',
-                content: data.response,
-                createdAt: new Date().toISOString(),
-            };
-            saveChatMessage(assistantMsg);
-            setMessages(prev => [...prev, assistantMsg]);
+            const reader = res.body!.getReader();
+            const decoder = new TextDecoder();
+            let fullText = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                fullText += chunk;
+                _messages = _messages.map(m =>
+                    m.id === assistantMsgId ? { ...m, content: fullText } : m
+                );
+                _notify();
+            }
+
+            // Commit the completed message to storage
+            const finalMsg = { ..._messages.find(m => m.id === assistantMsgId)! };
+            saveChatMessage(finalMsg);
+
         } catch (error) {
-            const errorMsg: ChatMessage = {
-                id: `chat-${Date.now()}-error`,
-                role: 'assistant',
-                content: `⚠️ ${error instanceof Error ? error.message : '오류가 발생했습니다. 다시 시도해주세요.'}`,
-                createdAt: new Date().toISOString(),
-            };
-            saveChatMessage(errorMsg);
-            setMessages(prev => [...prev, errorMsg]);
+            if ((error as { name?: string })?.name === 'AbortError') {
+                // User stopped — save partial text if any
+                const partial = _messages.find(m => m.id === assistantMsgId);
+                if (partial?.content) {
+                    const stoppedMsg = { ...partial, content: partial.content + '\n\n*(중단됨)*' };
+                    saveChatMessage(stoppedMsg);
+                    _messages = _messages.map(m => m.id === assistantMsgId ? stoppedMsg : m);
+                } else {
+                    _messages = _messages.filter(m => m.id !== assistantMsgId);
+                }
+            } else {
+                const errContent = `⚠️ ${error instanceof Error ? error.message : '오류가 발생했습니다. 다시 시도해주세요.'}`;
+                const errMsg: ChatMessage = {
+                    id: assistantMsgId,
+                    role: 'assistant',
+                    content: errContent,
+                    createdAt: new Date().toISOString(),
+                };
+                saveChatMessage(errMsg);
+                _messages = _messages.map(m => m.id === assistantMsgId ? errMsg : m);
+            }
         } finally {
-            setIsLoading(false);
+            _isStreaming = false;
+            _abortController = null;
+            _notify();
         }
+    };
+
+    const handleStop = () => {
+        _abortController?.abort();
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -162,10 +252,11 @@ export default function DietChatbot() {
     };
 
     const handleClear = () => {
-        if (messages.length === 0) return;
+        if (_messages.length === 0) return;
         if (confirm('대화 기록을 모두 삭제하시겠습니까?')) {
             clearChatMessages();
-            setMessages([]);
+            _messages = [];
+            _notify();
         }
     };
 
@@ -201,6 +292,9 @@ export default function DietChatbot() {
         });
     };
 
+    const messages = _messages;
+    const isStreaming = _isStreaming;
+
     return (
         <div className="chat-container">
             {/* Header */}
@@ -214,7 +308,7 @@ export default function DietChatbot() {
                         <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>체성분 · 식단 · 운동 데이터 기반 맞춤 코칭</div>
                     </div>
                 </div>
-                {messages.length > 0 && (
+                {messages.length > 0 && !isStreaming && (
                     <button className="chat-clear-btn" onClick={handleClear} title="대화 기록 삭제">
                         <Trash2 size={16} />
                     </button>
@@ -257,7 +351,17 @@ export default function DietChatbot() {
                         </div>
                         <div className={`chat-message-bubble ${msg.role}`}>
                             {msg.role === 'assistant' ? (
-                                <div className="chat-message-content">{formatContent(msg.content)}</div>
+                                <div className="chat-message-content">
+                                    {msg.content
+                                        ? formatContent(msg.content)
+                                        : (
+                                            <div className="chat-typing">
+                                                <Loader2 size={16} className="chat-spinner" />
+                                                <span>코치가 답변을 작성하고 있습니다...</span>
+                                            </div>
+                                        )
+                                    }
+                                </div>
                             ) : (
                                 <div className="chat-message-content" style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
                             )}
@@ -267,20 +371,6 @@ export default function DietChatbot() {
                         </div>
                     </div>
                 ))}
-
-                {isLoading && (
-                    <div className="chat-message assistant">
-                        <div className="chat-message-avatar assistant">
-                            <Bot size={16} />
-                        </div>
-                        <div className="chat-message-bubble assistant">
-                            <div className="chat-typing">
-                                <Loader2 size={16} className="chat-spinner" />
-                                <span>코치가 답변을 준비하고 있습니다...</span>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 <div ref={messagesEndRef} />
             </div>
@@ -294,7 +384,7 @@ export default function DietChatbot() {
                     </div>
                 )}
                 <div className="chat-input-wrapper">
-                    {micAvailable && (
+                    {micAvailable && !isStreaming && (
                         <button
                             className={`chat-mic-btn ${isListening ? 'listening' : ''}`}
                             onClick={toggleMic}
@@ -307,21 +397,33 @@ export default function DietChatbot() {
                     <textarea
                         ref={textareaRef}
                         className="chat-input"
-                        placeholder={isListening ? '음성을 듣고 있습니다...' : '코치에게 질문하세요... (Shift+Enter로 줄바꿈)'}
+                        placeholder={isListening ? '음성을 듣고 있습니다...' : isStreaming ? '답변을 생성 중입니다...' : '코치에게 질문하세요... (Shift+Enter로 줄바꿈)'}
                         value={input}
                         onChange={handleInputChange}
                         onKeyDown={handleKeyDown}
                         rows={1}
-                        disabled={isLoading || isListening}
+                        disabled={isStreaming || isListening}
                     />
-                    <button
-                        className={`chat-send-btn ${input.trim() && !isLoading ? 'active' : ''}`}
-                        onClick={() => handleSend()}
-                        disabled={!input.trim() || isLoading}
-                        type="button"
-                    >
-                        <Send size={18} />
-                    </button>
+                    {isStreaming ? (
+                        <button
+                            className="chat-send-btn active"
+                            onClick={handleStop}
+                            title="답변 중지"
+                            type="button"
+                            style={{ background: 'var(--danger, #ef4444)' }}
+                        >
+                            <StopCircle size={18} />
+                        </button>
+                    ) : (
+                        <button
+                            className={`chat-send-btn ${input.trim() ? 'active' : ''}`}
+                            onClick={() => handleSend()}
+                            disabled={!input.trim()}
+                            type="button"
+                        >
+                            <Send size={18} />
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

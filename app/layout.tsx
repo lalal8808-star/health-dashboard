@@ -21,6 +21,8 @@ export const viewport: Viewport = {
   themeColor: "#38bdf8",
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,   // iOS input 포커스 시 자동 줌인 방지
+  userScalable: false,
 };
 
 export default function RootLayout({

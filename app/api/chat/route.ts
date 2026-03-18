@@ -1,26 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { GoogleGenerativeAI, Content } from '@google/generative-ai';
+import { readRecentChats, saveChatEntry } from '@/app/lib/notion-chat';
+
+export const maxDuration = 60;
 
 const SYSTEM_PROMPT = `당신은 "코치"라는 이름의 전문 다이어트·건강 코칭 AI입니다.
-회원님의 체성분 데이터(인바디), 식단 기록, 운동 기록, 그리고 과거 대화 기록을 모두 참고하여
-맞춤형 조언을 제공합니다.
+회원님의 체성분, 식단, 운동 기록과 과거 대화를 참고하여 맞춤형 조언을 제공합니다.
 
-## 답변 스타일
-- 생리학적·영양학적 근거를 바탕으로 설명하되, 전문 용어는 쉽게 풀어서 말한다.
-- 이모지를 적극 활용하여 시각적으로 보기 좋게 답변한다 (🥇🥈🥉🚨💪🔥 등).
-- 음식 추천 시 순위(1순위, 2순위, 3순위)를 매기고, 각각 생리학적 장점과 섭취 팁을 구체적으로 제시한다.
-- 단순한 정보 나열이 아니라, 회원님의 실제 데이터를 인용하며 개인화된 조언을 한다.
-  예: "현재 골격근량 33.2kg을 지키려면..." / "오늘 점심에 드신 삼겹살 때문에..."
-- 위트있고 센스있는 비유를 섞어서 재미있게 답변한다.
-  예: "근육 시멘트가 빈틈없이 채워집니다" / "완벽한 스텔스 단백질입니다"
-- 마지막에는 반드시 🚨 "코치의 절대 수칙"을 1~3개 제시하여 핵심 실천사항을 강조한다.
-- 답변 제목은 이모지 + 핵심 키워드로 시작한다.
+## 답변 원칙
+- 짧은 질문엔 간결하게, 분석 요청엔 상세하게 답변한다 (질문 복잡도에 맞춤).
+- 이모지 활용, 구체적 수치 인용, 위트있는 표현 사용.
+- 음식/운동 추천 시 1~3순위 + 생리학적 이유 제시.
+- 마지막엔 🚨 "코치의 절대 수칙" 1~2개로 마무리.
 
-## 중요 규칙
-- 회원님의 실제 데이터가 있을 때는 반드시 구체적 수치를 인용한다.
-- 근거 없는 의학적 진단은 하지 않는다. 전문의 상담이 필요한 경우 그렇게 안내한다.
-- 칼로리, 영양소 수치를 제시할 때는 가능한 정확하게 한다.
-- 한국 식문화에 맞는 음식과 식단을 추천한다.`;
+## 식단 미기입 규칙
+- 미기입 날이 있으면 반드시 언급하고 기록을 독려한다.
+
+## 중요
+- 근거 없는 의학 진단 금지. 전문의 상담 필요 시 안내.
+- 한국 식문화에 맞는 추천.
+- 과거 대화 기록이 있으면 맥락을 이어간다.`;
 
 interface ChatRequestBody {
     message: string;
@@ -32,77 +31,67 @@ interface ChatRequestBody {
     };
 }
 
-function buildContextMessage(healthData: ChatRequestBody['healthData']): string {
-    const parts: string[] = ['[회원 건강 데이터 컨텍스트]'];
+function findMissingFoodDays(foodLogs: any[], days = 7): string[] {
+    const today = new Date();
+    const loggedDates = new Set((foodLogs || []).map((l: any) => l.date));
+    const missing: string[] = [];
+    for (let i = 0; i < days; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        if (!loggedDates.has(dateStr)) missing.push(dateStr);
+    }
+    return missing;
+}
 
-    // Health metrics (체성분)
-    if (healthData.records && healthData.records.length > 0) {
+function buildContextMessage(healthData: ChatRequestBody['healthData']): string {
+    const parts: string[] = ['[회원 건강 데이터]'];
+
+    if (healthData.records?.length > 0) {
         const sorted = [...healthData.records].sort(
             (a, b) => new Date(a.metrics.date).getTime() - new Date(b.metrics.date).getTime()
         );
         const latest = sorted[sorted.length - 1]?.metrics;
         const prev = sorted.length > 1 ? sorted[sorted.length - 2]?.metrics : null;
 
-        parts.push('\n## 최신 체성분 (인바디)');
+        parts.push('\n## 최신 체성분');
         if (latest) {
-            parts.push(`- 측정일: ${latest.date}`);
-            if (latest.weight != null) parts.push(`- 체중: ${latest.weight}kg${prev?.weight ? ` (이전: ${prev.weight}kg, 변화: ${(latest.weight - prev.weight).toFixed(1)}kg)` : ''}`);
-            if (latest.skeletalMuscle != null) parts.push(`- 골격근량: ${latest.skeletalMuscle}kg${prev?.skeletalMuscle ? ` (이전: ${prev.skeletalMuscle}kg)` : ''}`);
-            if (latest.bodyFatPercent != null) parts.push(`- 체지방률: ${latest.bodyFatPercent}%${prev?.bodyFatPercent ? ` (이전: ${prev.bodyFatPercent}%)` : ''}`);
-            if (latest.bodyFatMass != null) parts.push(`- 체지방량: ${latest.bodyFatMass}kg`);
-            if (latest.bmi != null) parts.push(`- BMI: ${latest.bmi}`);
-            if (latest.basalMetabolicRate != null) parts.push(`- 기초대사량: ${latest.basalMetabolicRate}kcal`);
-            if (latest.visceralFatLevel != null) parts.push(`- 내장지방 레벨: ${latest.visceralFatLevel}`);
-            if (latest.inbodyScore != null) parts.push(`- 인바디 점수: ${latest.inbodyScore}`);
-            if (latest.waistHipRatio != null) parts.push(`- 허리엉덩이비율: ${latest.waistHipRatio}`);
-            if (latest.height != null) parts.push(`- 키: ${latest.height}cm`);
-        }
-
-        if (sorted.length > 1) {
-            parts.push(`\n## 체성분 변화 추이 (최근 ${Math.min(sorted.length, 10)}회)`);
-            sorted.slice(-10).forEach(r => {
-                const m = r.metrics;
-                parts.push(`  ${m.date}: 체중 ${m.weight ?? '-'}kg / 골격근 ${m.skeletalMuscle ?? '-'}kg / 체지방률 ${m.bodyFatPercent ?? '-'}% / 인바디 ${m.inbodyScore ?? '-'}점`);
-            });
+            parts.push(`측정일: ${latest.date}`);
+            if (latest.weight != null) parts.push(`체중: ${latest.weight}kg${prev?.weight ? ` (변화: ${(latest.weight - prev.weight).toFixed(1)}kg)` : ''}`);
+            if (latest.skeletalMuscle != null) parts.push(`골격근량: ${latest.skeletalMuscle}kg`);
+            if (latest.bodyFatPercent != null) parts.push(`체지방률: ${latest.bodyFatPercent}%`);
+            if (latest.bodyFatMass != null) parts.push(`체지방량: ${latest.bodyFatMass}kg`);
+            if (latest.bmi != null) parts.push(`BMI: ${latest.bmi}`);
+            if (latest.basalMetabolicRate != null) parts.push(`기초대사량: ${latest.basalMetabolicRate}kcal`);
+            if (latest.visceralFatLevel != null) parts.push(`내장지방: ${latest.visceralFatLevel}`);
+            if (latest.inbodyScore != null) parts.push(`인바디점수: ${latest.inbodyScore}`);
         }
     }
 
-    // Food logs (오늘 + 최근 3일)
-    if (healthData.foodLogs && healthData.foodLogs.length > 0) {
+    if (healthData.foodLogs?.length > 0) {
         const sorted = [...healthData.foodLogs].sort((a, b) => b.date.localeCompare(a.date));
-        const recent = sorted.slice(0, 3);
-
-        parts.push('\n## 최근 식단 기록');
-        recent.forEach(log => {
-            const totalCal = log.entries.reduce((s: number, e: any) => s + (e.calories || 0), 0);
-            const totalP = log.entries.reduce((s: number, e: any) => s + (e.protein || 0), 0);
-            const totalC = log.entries.reduce((s: number, e: any) => s + (e.carbs || 0), 0);
-            const totalF = log.entries.reduce((s: number, e: any) => s + (e.fat || 0), 0);
-            parts.push(`\n### ${log.date} (목표: ${log.targetCalories}kcal, 실제: ${totalCal}kcal)`);
-            parts.push(`  총 영양소 - 단백질: ${totalP.toFixed(0)}g / 탄수화물: ${totalC.toFixed(0)}g / 지방: ${totalF.toFixed(0)}g`);
+        parts.push('\n## 최근 식단 (3일)');
+        sorted.slice(0, 3).forEach(log => {
+            const cal = log.entries.reduce((s: number, e: any) => s + (e.calories || 0), 0);
+            const p = log.entries.reduce((s: number, e: any) => s + (e.protein || 0), 0);
+            parts.push(`${log.date}: ${cal}kcal / 단백질 ${p.toFixed(0)}g`);
             log.entries.forEach((e: any) => {
-                const mealKo: Record<string, string> = { breakfast: '아침', lunch: '점심', dinner: '저녁', snack: '간식' };
-                parts.push(`  - [${mealKo[e.meal] || e.meal}] ${e.name} (${e.calories}kcal, P${e.protein}g/C${e.carbs}g/F${e.fat}g)`);
+                const m: Record<string, string> = { breakfast: '아침', lunch: '점심', dinner: '저녁', snack: '간식' };
+                parts.push(`  [${m[e.meal] || e.meal}] ${e.name} ${e.calories}kcal`);
             });
         });
     }
 
-    // Workout logs (최근 3일)
-    if (healthData.workoutLogs && healthData.workoutLogs.length > 0) {
-        const sorted = [...healthData.workoutLogs].sort((a, b) => b.date.localeCompare(a.date));
-        const recent = sorted.slice(0, 3);
+    const missingDays = findMissingFoodDays(healthData.foodLogs);
+    if (missingDays.length > 0) {
+        parts.push(`\n## ⚠️ 식단 미기입: ${missingDays.join(', ')} (${missingDays.length}일) — 반드시 언급할 것!`);
+    }
 
-        parts.push('\n## 최근 운동 기록');
-        recent.forEach(log => {
-            parts.push(`\n### ${log.date}`);
-            log.entries.forEach((e: any) => {
-                let detail = `  - ${e.name} (${e.type}, ${e.duration})`;
-                if (e.sets) detail += ` ${e.sets}세트`;
-                if (e.reps) detail += ` x ${e.reps}회`;
-                if (e.weight) detail += ` @ ${e.weight}kg`;
-                if (e.memo) detail += ` - ${e.memo}`;
-                parts.push(detail);
-            });
+    if (healthData.workoutLogs?.length > 0) {
+        const sorted = [...healthData.workoutLogs].sort((a, b) => b.date.localeCompare(a.date));
+        parts.push('\n## 최근 운동 (3일)');
+        sorted.slice(0, 3).forEach(log => {
+            parts.push(`${log.date}: ${log.entries.map((e: any) => e.name).join(', ')}`);
         });
     }
 
@@ -113,39 +102,43 @@ export async function POST(request: NextRequest) {
     try {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
-            return NextResponse.json(
-                { error: 'GEMINI_API_KEY가 설정되지 않았습니다.' },
-                { status: 500 }
-            );
+            return new Response('GEMINI_API_KEY가 설정되지 않았습니다.', { status: 500 });
         }
 
         const body: ChatRequestBody = await request.json();
         const { message, history, healthData } = body;
 
         if (!message?.trim()) {
-            return NextResponse.json({ error: '메시지를 입력해주세요.' }, { status: 400 });
+            return new Response('메시지를 입력해주세요.', { status: 400 });
+        }
+
+        // Notion read and context build in parallel
+        const [notionHistory, contextMessage] = await Promise.all([
+            readRecentChats(20).catch(() => [] as { question: string; answer: string; date: string }[]),
+            Promise.resolve(buildContextMessage(healthData)),
+        ]);
+
+        let notionContext = '';
+        if (notionHistory.length > 0) {
+            notionContext = '\n\n## 과거 대화 기록\n' +
+                notionHistory.map(h =>
+                    `[${new Date(h.date).toLocaleString('ko-KR')}] 회원: ${h.question}\n코치: ${h.answer.slice(0, 200)}${h.answer.length > 200 ? '...' : ''}`
+                ).join('\n\n');
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-pro-latest' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-3.1-pro-preview' });
 
-        // Build context from health data
-        const contextMessage = buildContextMessage(healthData);
-
-        // Build conversation history for Gemini
         const contents: Content[] = [];
-
-        // First message: system prompt + health data context
         contents.push({
             role: 'user',
-            parts: [{ text: `${SYSTEM_PROMPT}\n\n${contextMessage}\n\n위 데이터를 참고하여 답변해 주세요. 첫 인사는 생략하고, 바로 본론으로 들어가세요.` }],
+            parts: [{ text: `${SYSTEM_PROMPT}\n\n${contextMessage}${notionContext}\n\n위 데이터를 참고해 답변하세요. 첫 인사 생략.` }],
         });
         contents.push({
             role: 'model',
-            parts: [{ text: '네, 회원님의 모든 데이터를 확인했습니다. 무엇이든 물어보세요! 💪' }],
+            parts: [{ text: '데이터 확인 완료. 무엇이든 물어보세요! 💪' }],
         });
 
-        // Add past conversation history (last 20 messages to stay within context)
         const recentHistory = history.slice(-20);
         for (const msg of recentHistory) {
             contents.push({
@@ -153,23 +146,47 @@ export async function POST(request: NextRequest) {
                 parts: [{ text: msg.content }],
             });
         }
+        contents.push({ role: 'user', parts: [{ text: message }] });
 
-        // Add the current user message
-        contents.push({
-            role: 'user',
-            parts: [{ text: message }],
+        const result = await model.generateContentStream({ contents });
+
+        let fullResponse = '';
+        const encoder = new TextEncoder();
+
+        const stream = new ReadableStream({
+            async start(controller) {
+                try {
+                    for await (const chunk of result.stream) {
+                        const text = chunk.text();
+                        if (text) {
+                            fullResponse += text;
+                            controller.enqueue(encoder.encode(text));
+                        }
+                    }
+                } catch (err) {
+                    controller.error(err);
+                } finally {
+                    // ① Notion 저장을 먼저 await — Vercel이 스트림 닫히는 순간 함수를 종료하므로
+                    //    fire-and-forget(.catch(()=>{}))으로 하면 저장 전에 프로세스가 죽음
+                    try {
+                        await saveChatEntry(message, fullResponse);
+                    } catch {
+                        // Notion 저장 실패해도 스트림은 정상 종료
+                    }
+                    controller.close(); // ② 저장 완료 후 스트림 닫기
+                }
+            },
         });
 
-        const result = await model.generateContent({ contents });
-        const responseText = result.response.text();
-
-        return NextResponse.json({ response: responseText });
+        return new Response(stream, {
+            headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Transfer-Encoding': 'chunked',
+                'X-Accel-Buffering': 'no',
+            },
+        });
     } catch (error: any) {
         console.error('Chat error:', error);
-        const msg = error?.message || error?.toString() || '알 수 없는 오류';
-        return NextResponse.json(
-            { error: `AI 응답 오류: ${msg}` },
-            { status: 500 }
-        );
+        return new Response(`AI 응답 오류: ${error?.message || error?.toString()}`, { status: 500 });
     }
 }

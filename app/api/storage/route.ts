@@ -6,6 +6,8 @@ const ALLOWED_KEYS = new Set([
     'health-dashboard-workout-logs',
     'health-dashboard-food-logs',
     'health-dashboard-meal-presets',
+    'health-dashboard-chat-messages',   // 챗봇 크로스기기 동기화
+    'health-dashboard-food-items',      // 음식 DB 크로스기기 동기화
 ]);
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;

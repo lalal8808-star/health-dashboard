@@ -78,6 +78,7 @@
 html {
   font-size: 16px;
   scroll-behavior: smooth;
+  overflow-x: hidden; /* 모바일 가로 스크롤 차단 */
 }
 
 body {
@@ -88,6 +89,8 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden; /* 모바일 가로 스크롤 차단 */
+  width: 100%;
 }
 
 body::before {
@@ -250,6 +253,9 @@ body::before {
   display: flex;
   min-height: 100vh;
   background: var(--bg-primary);
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
 }
 
 /* ==================== SIDEBAR ==================== */
@@ -1673,7 +1679,11 @@ body::before {
 
   .main-content {
     margin-left: 0;
-    padding: 76px 16px 24px;
+    padding: 76px 14px 32px;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+    box-sizing: border-box;
   }
 
   .metrics-grid {
@@ -1810,7 +1820,10 @@ body::before {
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 120px);
+  /* dvh: iOS Safari/Chrome에서 주소창 제외한 실제 가시 영역 사용 */
+  height: calc(100dvh - 120px);
+  height: calc(100vh - 120px); /* fallback for older browsers */
+  min-height: 400px;
   max-height: 800px;
   background: var(--bg-card);
   border: 1px solid var(--border-glass);
@@ -2114,7 +2127,9 @@ body::before {
 /* Mobile chat adjustments */
 @media (max-width: 768px) {
   .chat-container {
-    height: calc(100vh - 160px);
+    height: calc(100dvh - 160px);
+    height: calc(100vh - 160px); /* fallback */
+    min-height: 360px;
     border-radius: 12px;
   }
   .chat-messages {
@@ -2152,48 +2167,126 @@ body::before {
 
 /* ─── Global mobile improvements ─── */
 @media (max-width: 768px) {
-  /* Main header stacks on small screens */
+  /* ── 기본 타이포그래피: iOS 자동 줌 방지 (input font-size ≥ 16px) ── */
+  input, textarea, select {
+    font-size: 16px !important;  /* iOS는 16px 미만이면 자동 줌인 발생 */
+  }
+
+  /* ── 레이아웃 ── */
   .main-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+    margin-bottom: 20px;
+  }
+  .main-header-left h2 {
+    font-size: 20px;
+  }
+  .main-header-left p {
+    font-size: 13px;
   }
   .main-header-right {
     width: 100%;
     justify-content: flex-start !important;
     flex-wrap: wrap;
   }
-  /* Metric cards: single column on very small */
   .main-content {
-    padding: 76px 12px 32px;
+    padding: 76px 12px 40px;
   }
-  /* Raw data table: horizontal scroll */
+
+  /* ── 카드 ── */
+  .chart-card {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  /* ── 테이블 ── */
   .raw-data-table-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
-  /* Prediction cards stack */
-  .prediction-summary {
-    grid-template-columns: 1fr;
-  }
-  /* Chart card padding */
-  .chart-card {
-    padding: 16px;
-  }
-  /* Insights cards */
+
+  /* ── 그리드 ── */
+  .prediction-summary,
   .insights-grid {
     grid-template-columns: 1fr;
   }
-  /* Compare selectors */
   .compare-selectors {
     flex-direction: column;
   }
-  /* Touch target improvements */
-  .btn {
+
+  /* ── 터치 타겟 최소 44px (Apple HIG) ── */
+  .btn, button {
     min-height: 44px;
   }
+  .btn-sm {
+    min-height: 36px;
+    font-size: 13px;
+  }
   .sidebar-nav-item {
-    min-height: 48px;
-    padding: 12px 16px;
+    min-height: 52px;
+    padding: 14px 16px;
+    font-size: 15px;
+  }
+
+  /* ── 메트릭 카드 ── */
+  .metrics-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .metric-card {
+    padding: 14px;
+  }
+  .metric-value {
+    font-size: 22px;
+  }
+
+  /* ── 차트 레이블 ── */
+  .recharts-cartesian-axis-tick text {
+    font-size: 11px;
+  }
+
+  /* ── 넘침 방지: 모든 카드·컨테이너 ── */
+  .chart-card,
+  .metric-card,
+  .card,
+  .insights-card,
+  .risk-card,
+  .compare-card,
+  .history-card,
+  .upload-card,
+  .food-card,
+  .workout-card {
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+
+  /* 테이블은 가로 스크롤 허용 (내용이 많아서 접기 어려움) */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
+  /* 이미지·차트가 컨테이너 넘지 않도록 */
+  img, svg, canvas {
+    max-width: 100%;
+  }
+
+  /* recharts 컨테이너 */
+  .recharts-responsive-container {
+    max-width: 100% !important;
+  }
+}
+
+/* ── 소형 모바일 (360px 이하) ── */
+@media (max-width: 360px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .main-content {
+    padding: 72px 10px 36px;
   }
 }

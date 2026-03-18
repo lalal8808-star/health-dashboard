@@ -20,6 +20,8 @@ import {
   getRecords,
   saveRecord,
   deleteRecord,
+  bulkSaveRecords,
+  deduplicateRecordsByDate,
   getLatestRecord,
   getChartData,
   generateId,
@@ -49,6 +51,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [csvResult, setCsvResult] = useState<CSVParseResult | null>(null);
+  const [chatSyncVersion, setChatSyncVersion] = useState(0);
 
   const refreshData = useCallback(() => {
     const allRecords = getRecords();
@@ -57,8 +60,12 @@ export default function Home() {
     setChartData(getChartData());
   }, []);
 
-  // Initialize with sample data if no records
+  // Initialize: 날짜 중복 정리 후 샘플 데이터 초기화
   useEffect(() => {
+    // ① 기존 데이터 날짜 중복 제거 (한 날짜에 1개만 유지, 최신 기준)
+    deduplicateRecordsByDate();
+
+    // ② 레코드가 없으면 샘플 데이터 삽입
     const existing = getRecords();
     if (existing.length === 0) {
       sampleRecords.forEach((r) => saveRecord(r));
@@ -161,29 +168,31 @@ export default function Home() {
       setProgressMessage(`${result.parsedRows}개 기록을 저장하는 중...`);
 
       if (result.success) {
-        // Remove sample data before importing real data
         const existing = getRecords();
-        const sampleIds = sampleRecords.map(s => s.id);
-        sampleIds.forEach(id => {
-          if (existing.some(r => r.id === id)) {
-            deleteRecord(id);
-          }
-        });
+        const sampleIds = new Set(sampleRecords.map(s => s.id));
+        // 가져온 CSV의 날짜 목록
+        const importedDates = new Set(result.records.map(r => r.date));
 
-        for (const metrics of result.records) {
-          const id = generateId();
-          const newRecord: AnalysisRecord = {
-            id,
-            createdAt: new Date().toISOString(),
-            imageFileName: file.name,
-            metrics,
-            exerciseGuide: null,
-            dietGuide: null,
-          };
-          saveRecord(newRecord);
-        }
+        // 삭제 대상: 샘플 레코드 또는 같은 날짜의 기존 레코드 (localStorage만 직접 처리)
+        const toKeep = existing.filter(
+          r => !sampleIds.has(r.id) && !importedDates.has(r.metrics.date)
+        );
+
+        // 새 레코드 배열 생성
+        const newRecords: AnalysisRecord[] = result.records.map(metrics => ({
+          id: generateId(),
+          createdAt: new Date().toISOString(),
+          imageFileName: file.name,
+          metrics,
+          exerciseGuide: null,
+          dietGuide: null,
+        }));
+
+        // 보존 레코드 + 새 레코드를 합쳐 단 1번에 저장 (경쟁 조건 방지)
+        bulkSaveRecords([...toKeep, ...newRecords]);
+
         setProgress(100);
-        setProgressMessage('가져오기 완료!');
+        setProgressMessage(`${newRecords.length}개 기록 저장 완료!`);
         refreshData();
       }
 
@@ -230,7 +239,7 @@ export default function Home() {
   return (
     <div className="app-container">
       {/* Server Sync (invisible) */}
-      <StorageSync onSynced={refreshData} />
+      <StorageSync onSynced={() => { refreshData(); setChatSyncVersion(v => v + 1); }} />
 
       {/* Mobile Header */}
       <div className="mobile-header">
@@ -326,7 +335,7 @@ export default function Home() {
 
         {/* AI Coach Chat View */}
         {activeTab === 'chat' && (
-          <DietChatbot />
+          <DietChatbot syncVersion={chatSyncVersion} />
         )}
       </main>
     </div>

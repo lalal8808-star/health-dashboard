@@ -63,6 +63,9 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
     const [showFoodSearch, setShowFoodSearch] = useState(false);
     const [foodItems, setFoodItems] = useState<FoodItem[]>(() => getFoodItems());
     const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
+    const [isAISearching, setIsAISearching] = useState(false);
+    const [aiSearchError, setAISearchError] = useState<string | null>(null);
+    const aiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isProcessingRef = useRef(false);
 
@@ -85,6 +88,21 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
         setSelectedDate(today);
         setFoodLog(getFoodLogByDate(today));
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // 검색어 입력 시 800ms 디바운스 → 로컬 결과 없으면 자동 AI 검색
+    useEffect(() => {
+        if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current);
+        const query = foodSearch.trim();
+        if (!query || isAISearching) return;
+        const localResults = searchFoodItems(query);
+        if (localResults.length > 0) return; // 로컬에 있으면 AI 검색 불필요
+        aiDebounceRef.current = setTimeout(() => {
+            handleAISearch();
+        }, 800);
+        return () => {
+            if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current);
+        };
+    }, [foodSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const refreshPresets = () => setPresets(getMealPresets());
 
@@ -211,6 +229,44 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
         setSelectedFood(food);
         setFoodSearch('');
         setShowFoodSearch(false);
+        setAISearchError(null);
+    };
+
+    const handleAISearch = async () => {
+        const query = foodSearch.trim();
+        if (!query || isAISearching) return;
+        setIsAISearching(true);
+        setAISearchError(null);
+        try {
+            const res = await fetch('/api/food-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                const newFood: FoodItem = {
+                    id: `food-${Date.now()}`,
+                    name: data.name,
+                    description: data.description || '',
+                    calories: data.calories,
+                    protein: data.protein,
+                    carbs: data.carbs,
+                    fat: data.fat,
+                    createdAt: new Date().toISOString(),
+                };
+                // 데이터베이스에 저장 (다음 검색 시 로컬에서 바로 찾을 수 있도록)
+                saveFoodItem(newFood);
+                setFoodItems(getFoodItems());
+                handleSelectFood(newFood);
+            } else {
+                setAISearchError(data.error || '영양 정보를 찾을 수 없습니다.');
+            }
+        } catch {
+            setAISearchError('네트워크 오류가 발생했습니다.');
+        } finally {
+            setIsAISearching(false);
+        }
     };
 
     const handleDelete = (entryId: string) => { deleteFoodEntry(selectedDate, entryId); refreshLog(selectedDate); };
@@ -544,19 +600,54 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
 
             {/* 직접 입력 폼 */}
             {showManualForm && (
-                <form onSubmit={handleManualAdd} className="chart-card" style={{ marginBottom: '24px' }}>
+                <form key={selectedFood?.id ?? 'none'} onSubmit={handleManualAdd} className="chart-card" style={{ marginBottom: '24px' }}>
                     {/* 음식 검색/선택 */}
                     <div style={{ marginBottom: '16px' }}>
                         <label style={labelStyle}>🔍 음식 검색 (선택 사항)</label>
                         <div style={{ position: 'relative' }}>
-                            <input
-                                type="text"
-                                value={foodSearch}
-                                onChange={e => { setFoodSearch(e.target.value); setShowFoodSearch(true); }}
-                                onFocus={() => setShowFoodSearch(true)}
-                                style={inputStyle}
-                                placeholder="콜라, 피자, 닭가슴살 등..."
-                            />
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <input
+                                    type="text"
+                                    value={foodSearch}
+                                    onChange={e => { setFoodSearch(e.target.value); setShowFoodSearch(true); setAISearchError(null); }}
+                                    onFocus={() => setShowFoodSearch(true)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            const results = searchFoodItems(foodSearch);
+                                            if (results.length === 0 && foodSearch.trim()) handleAISearch();
+                                            else if (results.length > 0) handleSelectFood(results[0]);
+                                        }
+                                    }}
+                                    style={{ ...inputStyle, flex: 1 }}
+                                    placeholder="연어 400g, 바나나 1개, 아메리카노 등 입력 후 자동 검색..."
+                                    disabled={isAISearching}
+                                />
+                                {foodSearch.trim() && searchFoodItems(foodSearch).length === 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={handleAISearch}
+                                        disabled={isAISearching}
+                                        style={{
+                                            padding: '0 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                            color: '#fff', fontSize: '12px', fontWeight: 600,
+                                            whiteSpace: 'nowrap', flexShrink: 0,
+                                            opacity: isAISearching ? 0.7 : 1,
+                                            display: 'flex', alignItems: 'center', gap: '4px',
+                                        }}
+                                    >
+                                        {isAISearching ? (
+                                            <>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+                                                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                                </svg>
+                                                검색 중...
+                                            </>
+                                        ) : '🤖 AI 검색'}
+                                    </button>
+                                )}
+                            </div>
                             {showFoodSearch && foodSearch && (
                                 <div style={{
                                     position: 'absolute', top: '100%', left: 0, right: 0,
@@ -581,9 +672,22 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
                                             </div>
                                         </div>
                                     ))}
-                                    {searchFoodItems(foodSearch).length === 0 && (
+                                    {searchFoodItems(foodSearch).length === 0 && !isAISearching && (
                                         <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                                            해당 음식이 없습니다. 아래에서 직접 입력하세요.
+                                            잠시 후 🤖 Gemini가 자동으로 영양 정보를 검색합니다...
+                                        </div>
+                                    )}
+                                    {isAISearching && (
+                                        <div style={{ padding: '14px', textAlign: 'center', fontSize: '12px', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }}>
+                                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                            </svg>
+                                            Gemini가 &ldquo;{foodSearch}&rdquo; 영양 정보 분석 중...
+                                        </div>
+                                    )}
+                                    {aiSearchError && (
+                                        <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: '#ef4444' }}>
+                                            ⚠️ {aiSearchError}
                                         </div>
                                     )}
                                 </div>

@@ -22,10 +22,9 @@ export function getRecords(): AnalysisRecord[] {
                 r.metrics != null &&
                 typeof r.metrics.date === 'string'
         );
-        // 유효하지 않은 항목이 있었으면 정리
+        // 유효하지 않은 항목이 있으면 정리하되, 유효한 것은 보존
         if (valid.length !== parsed.length) {
-            localStorage.removeItem(STORAGE_KEY);
-            return [];
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(valid));
         }
         return valid;
     } catch {
@@ -36,19 +35,60 @@ export function getRecords(): AnalysisRecord[] {
 
 export function saveRecord(record: AnalysisRecord): void {
     const records = getRecords();
-    const existingIndex = records.findIndex(r => r.id === record.id);
-    if (existingIndex >= 0) {
-        records[existingIndex] = record;
-    } else {
-        records.push(record);
-    }
-    records.sort((a, b) => new Date(a.metrics.date).getTime() - new Date(b.metrics.date).getTime());
-    syncedSetItem(STORAGE_KEY, records);
+    // ID 또는 날짜가 같은 기존 레코드를 모두 제거하고 새 레코드로 교체
+    const filtered = records.filter(
+        r => r.id !== record.id && r.metrics.date !== record.metrics.date
+    );
+    filtered.push(record);
+    filtered.sort((a, b) => new Date(a.metrics.date).getTime() - new Date(b.metrics.date).getTime());
+    syncedSetItem(STORAGE_KEY, filtered);
 }
 
 export function deleteRecord(id: string): void {
     const records = getRecords().filter(r => r.id !== id);
     syncedSetItem(STORAGE_KEY, records);
+}
+
+/**
+ * 여러 레코드를 한 번에 저장 (CSV 가져오기 등 대량 저장 시 사용)
+ * - 날짜 기준 dedup: 같은 날짜면 newRecords 우선
+ * - localStorage + Redis 단 1번 저장
+ */
+export function bulkSaveRecords(newRecords: AnalysisRecord[]): void {
+    const existing = getRecords();
+    const incomingDates = new Set(newRecords.map(r => r.metrics.date));
+    const incomingIds   = new Set(newRecords.map(r => r.id));
+    // 기존 중 날짜/ID가 겹치지 않는 것만 보존
+    const base = existing.filter(
+        r => !incomingDates.has(r.metrics.date) && !incomingIds.has(r.id)
+    );
+    const merged = [...base, ...newRecords].sort(
+        (a, b) => new Date(a.metrics.date).getTime() - new Date(b.metrics.date).getTime()
+    );
+    syncedSetItem(STORAGE_KEY, merged);
+}
+
+/**
+ * 현재 저장된 레코드에서 날짜 중복 제거 (앱 최초 로드 시 1회 실행)
+ * 같은 날짜가 여러 개면 createdAt이 가장 최신인 것 1개만 유지
+ */
+export function deduplicateRecordsByDate(): number {
+    const records = getRecords();
+    const byDate = new Map<string, AnalysisRecord>();
+    records.forEach(r => {
+        const existing = byDate.get(r.metrics.date);
+        if (!existing || new Date(r.createdAt) > new Date(existing.createdAt)) {
+            byDate.set(r.metrics.date, r);
+        }
+    });
+    const deduped = Array.from(byDate.values()).sort(
+        (a, b) => new Date(a.metrics.date).getTime() - new Date(b.metrics.date).getTime()
+    );
+    const removed = records.length - deduped.length;
+    if (removed > 0) {
+        syncedSetItem(STORAGE_KEY, deduped);
+    }
+    return removed; // 제거된 개수 반환
 }
 
 export function getLatestRecord(): AnalysisRecord | null {
