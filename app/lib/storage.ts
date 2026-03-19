@@ -22,11 +22,27 @@ export function getRecords(): AnalysisRecord[] {
                 r.metrics != null &&
                 typeof r.metrics.date === 'string'
         );
-        // 유효하지 않은 항목이 있으면 정리하되, 유효한 것은 보존
-        if (valid.length !== parsed.length) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(valid));
+
+        // 날짜가 겹치는 기록 자동 정리 (가장 최근에 저장된 것만 유지)
+        const byDate = new Map<string, AnalysisRecord>();
+        valid.forEach(r => {
+            const existing = byDate.get(r.metrics.date);
+            // createdAt이 없을 수 있으므로 대비
+            const rTime = r.createdAt ? new Date(r.createdAt).getTime() : 0;
+            const existingTime = existing?.createdAt ? new Date(existing.createdAt).getTime() : 0;
+            if (!existing || rTime > existingTime) {
+                byDate.set(r.metrics.date, r);
+            }
+        });
+        const deduped = Array.from(byDate.values()).sort(
+            (a, b) => new Date(a.metrics.date).getTime() - new Date(b.metrics.date).getTime()
+        );
+
+        // 유효하지 않은 항목이 있거나 중복이 제거된 경우 스토리지 업데이트
+        if (valid.length !== parsed.length || deduped.length !== valid.length) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
         }
-        return valid;
+        return deduped;
     } catch {
         localStorage.removeItem(STORAGE_KEY);
         return [];
