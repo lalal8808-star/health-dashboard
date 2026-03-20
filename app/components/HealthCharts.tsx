@@ -61,7 +61,9 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                         <span className="dot" style={{ background: '#3b82f6' }} />
                         체중 · 골격근량 · 체지방량 변화
                     </div>
-                    <ResponsiveContainer width="100%" height={220}>
+                    <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '8px' }}>
+                        <div style={{ minWidth: chartData.length > 6 ? `${chartData.length * 45}px` : '100%', height: 170 }}>
+                            <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                             <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} />
@@ -71,7 +73,9 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                             <Line yAxisId="left" type="monotone" dataKey="skeletalMuscle" name="골격근량(kg)" stroke="#10b981" strokeWidth={2} dot={{ r: 4, fill: '#10b981' }} activeDot={{ r: 6 }} />
                             <Line yAxisId="left" type="monotone" dataKey="bodyFatMass" name="체지방량(kg)" stroke="#ef4444" strokeWidth={2} dot={{ r: 4, fill: '#ef4444' }} activeDot={{ r: 6 }} />
                         </LineChart>
-                    </ResponsiveContainer>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="chart-card">
@@ -79,7 +83,9 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                         <span className="dot" style={{ background: '#f59e0b' }} />
                         인바디 점수 변화
                     </div>
-                    <ResponsiveContainer width="100%" height={220}>
+                    <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '8px' }}>
+                        <div style={{ minWidth: chartData.length > 6 ? `${chartData.length * 45}px` : '100%', height: 170 }}>
+                            <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                             <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} />
@@ -95,7 +101,9 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                                 })}
                             </Bar>
                         </BarChart>
-                    </ResponsiveContainer>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -106,7 +114,9 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                         <span className="dot" style={{ background: '#ef4444' }} />
                         체지방률 (%)
                     </div>
-                    <ResponsiveContainer width="100%" height={160}>
+                    <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '8px' }}>
+                        <div style={{ minWidth: chartData.length > 6 ? `${chartData.length * 45}px` : '100%', height: 130 }}>
+                            <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                             <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} />
@@ -114,7 +124,9 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                             <Tooltip content={<CustomTooltip />} />
                             <Line type="monotone" dataKey="bodyFatPercent" name="체지방률(%)" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: '#ef4444' }} />
                         </LineChart>
-                    </ResponsiveContainer>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="chart-card">
@@ -122,7 +134,9 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                         <span className="dot" style={{ background: '#8b5cf6' }} />
                         기초대사량 (kcal)
                     </div>
-                    <ResponsiveContainer width="100%" height={160}>
+                    <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '8px' }}>
+                        <div style={{ minWidth: chartData.length > 6 ? `${chartData.length * 45}px` : '100%', height: 160 }}>
+                            <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                             <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} />
@@ -130,7 +144,9 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                             <Tooltip content={<CustomTooltip />} />
                             <Line type="monotone" dataKey="basalMetabolicRate" name="기초대사량" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3, fill: '#8b5cf6' }} />
                         </LineChart>
-                    </ResponsiveContainer>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="chart-card">
@@ -138,7 +154,9 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                         <span className="dot" style={{ background: '#06b6d4' }} />
                         BMI · 복부지방률
                     </div>
-                    <ResponsiveContainer width="100%" height={160}>
+                    <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '8px' }}>
+                        <div style={{ minWidth: chartData.length > 6 ? `${chartData.length * 45}px` : '100%', height: 160 }}>
+                            <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 10, right: 10, left: -30, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                             <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} />
@@ -148,7 +166,9 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                             <Line yAxisId="left" type="monotone" dataKey="bmi" name="BMI" stroke="#06b6d4" strokeWidth={2} dot={{ r: 3, fill: '#06b6d4' }} />
                             <Line yAxisId="right" type="monotone" dataKey="waistHipRatio" name="복부지방률" stroke="#f59e0b" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: '#f59e0b' }} />
                         </LineChart>
-                    </ResponsiveContainer>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
                 </div>
             </div>
         </>

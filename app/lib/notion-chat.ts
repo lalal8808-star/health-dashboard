@@ -87,29 +87,27 @@ export async function saveChatEntry(question: string, answer: string): Promise<v
         const title = question.slice(0, 80).replace(/\n/g, ' ');
         const category = categorize(question);
 
-        // 2) 전체 속성으로 저장 시도
+        // 2) 제목(질문) + 답변내용 + 카테고리 저장
         try {
             await notion.pages.create({
                 parent: { database_id: dbId },
                 properties: {
                     [titlePropName]: { title: [{ type: 'text', text: { content: title } }] },
-                    '질문내용': { rich_text: splitText(question) },
                     '답변내용': { rich_text: splitText(answer) },
                     '카테고리': { select: { name: category } },
                 },
             } as any);
-            return; // 성공
+            return;
         } catch (e1: any) {
             console.error('[Notion] 1차 저장 실패:', e1?.message);
         }
 
-        // 3) 카테고리 제외하고 재시도
+        // 3) 카테고리 제외 재시도
         try {
             await notion.pages.create({
                 parent: { database_id: dbId },
                 properties: {
                     [titlePropName]: { title: [{ type: 'text', text: { content: title } }] },
-                    '질문내용': { rich_text: splitText(question) },
                     '답변내용': { rich_text: splitText(answer) },
                 },
             } as any);
@@ -118,7 +116,7 @@ export async function saveChatEntry(question: string, answer: string): Promise<v
             console.error('[Notion] 2차 저장 실패:', e2?.message);
         }
 
-        // 4) 타이틀만으로 최소 저장
+        // 4) 타이틀만 최소 저장
         await notion.pages.create({
             parent: { database_id: dbId },
             properties: {

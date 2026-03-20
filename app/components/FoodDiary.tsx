@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, Cell, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, Cell, ResponsiveContainer, PieChart, Pie } from 'recharts';
 import { FoodEntry, DailyFoodLog, MealPreset, FoodItem } from '@/app/lib/types';
 import {
     getFoodLogs, getFoodLogByDate, saveFoodEntry, deleteFoodEntry, getTotalCalories,
@@ -65,7 +65,6 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
     const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
     const [isAISearching, setIsAISearching] = useState(false);
     const [aiSearchError, setAISearchError] = useState<string | null>(null);
-    const aiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isProcessingRef = useRef(false);
 
@@ -89,20 +88,7 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
         setFoodLog(getFoodLogByDate(today));
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // 검색어 입력 시 800ms 디바운스 → 로컬 결과 없으면 자동 AI 검색
-    useEffect(() => {
-        if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current);
-        const query = foodSearch.trim();
-        if (!query || isAISearching) return;
-        const localResults = searchFoodItems(query);
-        if (localResults.length > 0) return; // 로컬에 있으면 AI 검색 불필요
-        aiDebounceRef.current = setTimeout(() => {
-            handleAISearch();
-        }, 800);
-        return () => {
-            if (aiDebounceRef.current) clearTimeout(aiDebounceRef.current);
-        };
-    }, [foodSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
     const refreshPresets = () => setPresets(getMealPresets());
 
@@ -445,6 +431,90 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
                     ))}
                 </div>
             </div>
+
+            {/* ── 영양소 밸런스 분석 ── */}
+            {totals.calories > 0 && (() => {
+                const pCal = totals.protein * 4;
+                const cCal = totals.carbs * 4;
+                const fCal = totals.fat * 9;
+                const totalMacroCal = pCal + cCal + fCal || 1;
+                const pPct = Math.round(pCal / totalMacroCal * 100);
+                const cPct = Math.round(cCal / totalMacroCal * 100);
+                const fPct = Math.round(fCal / totalMacroCal * 100);
+                // 💪 하체 엔진(러킹/HIIT) 최적 비율: 단백질 40%, 탄수화물 30%, 지방 30%
+                // 기준점: 사용자의 최신 기초대사량 (BMR) 직접 사용 (활동 대사량 제외)
+                const dietTargetCal = bmrInfo.bmr || 1500;
+                const targetProtein = Math.round(dietTargetCal * 0.40 / 4);
+                const targetCarbs = Math.round(dietTargetCal * 0.30 / 4);
+                const targetFat = Math.round(dietTargetCal * 0.30 / 9);
+                const deficits = [
+                    totals.protein < targetProtein * 0.8 ? `🥩 단백질이 ${targetProtein - totals.protein}g 부족합니다 (목표: ${targetProtein}g)` : null,
+                    totals.carbs < targetCarbs * 0.7 ? `🍎 탄수화물이 ${targetCarbs - totals.carbs}g 부족합니다 (목표: ${targetCarbs}g)` : null,
+                    totals.fat > targetFat * 1.3 ? `🥑 지방 섭취가 ${totals.fat - targetFat}g 초과되었습니다 (목표: ${targetFat}g 이하)` : null,
+                ].filter(Boolean) as string[];
+                const pieData = [
+                    { name: '단백질', value: pPct, target: 40, color: '#10b981', gram: totals.protein, targetGram: targetProtein },
+                    { name: '탄수화물', value: cPct, target: 30, color: '#3b82f6', gram: totals.carbs, targetGram: targetCarbs },
+                    { name: '지방', value: fPct, target: 30, color: '#f59e0b', gram: totals.fat, targetGram: targetFat },
+                ];
+                return (
+                    <div className="chart-card" style={{ marginBottom: '24px' }}>
+                        <div style={{ marginBottom: '12px' }}>
+                            <div style={{ fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                🥗 영양소 밸런스
+                                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 400 }}>💪 하체 엔진 맞춤형: 단40:탄30:지30</span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+                                🥩 단백질 120~140g · 🍎 탄수화물 100~130g · 🥑 지방 40~60g
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                            <div style={{ width: 110, height: 110, flexShrink: 0, position: 'relative' }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={30} outerRadius={48} paddingAngle={3}>
+                                            {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                                        </Pie>
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>비율</div>
+                                </div>
+                            </div>
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {pieData.map((d) => {
+                                    const diff = d.value - d.target;
+                                    return (
+                                        <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
+                                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', minWidth: '52px' }}>{d.name}</span>
+                                            <div style={{ display: 'flex', flexDirection: 'column', minWidth: '44px' }}>
+                                                <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>{d.value}%</span>
+                                                <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', lineHeight: 1.2 }}>{d.gram}g 섭취</span>
+                                            </div>
+                                            <span style={{
+                                                fontSize: '11px', fontWeight: 600,
+                                                color: Math.abs(diff) <= 5 ? 'var(--accent-green)' : diff > 0 ? 'var(--accent-red)' : 'var(--accent-blue)',
+                                            }}>{diff > 0 ? `+${diff}` : diff}{diff !== 0 ? '%p' : ' ✓'}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        {deficits.length > 0 && (
+                            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {deficits.map((d, i) => (
+                                    <div key={i} style={{
+                                        padding: '8px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 500,
+                                        background: 'rgba(239,68,68,0.1)', color: '#ef4444',
+                                        display: 'flex', alignItems: 'center', gap: '6px',
+                                    }}>⚠️ {d}</div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
             {/* 식사 선택 + 저장된 식단 불러오기 */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>

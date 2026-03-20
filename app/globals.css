@@ -621,11 +621,17 @@ body::before {
   margin-left: 4px;
 }
 
+/* KPI 행 스크롤 래퍼: 모바일에서 overflow 컨테이너 역할 */
+.kpi-row-scroll-wrapper {
+  width: 100%;
+  overflow: visible; /* 데스크탑에서는 일반 렌더링 */
+  margin-bottom: 24px;
+}
+
 .kpi-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 16px;
-  margin-bottom: 24px;
 }
 
 .kpi-card {
@@ -700,6 +706,87 @@ body::before {
   font-size: 10px;
   color: var(--text-tertiary);
   margin-top: 4px;
+}
+
+/* ==================== DASHBOARD GRID LAYOUT ==================== */
+.dashboard-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  /* 고정 높이 없이 자연스럽게 늘어나게 */
+}
+
+.dashboard-body {
+  display: grid;
+  grid-template-columns: 55% 45%;
+  gap: 16px;
+  align-items: start; /* 컬럼 높이 독립 */
+}
+
+.dashboard-col-left,
+.dashboard-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0; /* 그리드 오버플로우 방지 */
+}
+
+/* 왼쪽 컬럼: charts-grid를 1컬럼으로 쌓기 (2열→1열) */
+.dashboard-col-left .charts-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  margin-bottom: 0 !important;
+}
+
+/* 왼쪽 컬럼: charts-grid-3를 1컬럼으로 (3개 세로 쌓기) */
+.dashboard-col-left .charts-grid-3 {
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+  margin-bottom: 0 !important;
+}
+
+/* 컴팩트 차트 카드 */
+.dashboard-layout .chart-card {
+  padding: 12px !important;
+  margin-bottom: 0 !important;
+  /* overflow: visible 제거 - 차트가 카드 밖으로 나오면 옆 컬럼 덮음 */
+}
+
+.dashboard-layout .chart-title {
+  margin-bottom: 8px !important;
+  font-size: 12px;
+}
+
+/* 오른쪽 컬럼: insight-row 세로 쌓기 */
+.dashboard-col-right .insight-row {
+  grid-template-columns: 1fr !important;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.dashboard-col-right .insight-card {
+  padding: 10px 14px;
+}
+
+.dashboard-col-right .insight-icon {
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+
+.dashboard-col-right .insight-text {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* 예측 요약카드 */
+.dashboard-layout .prediction-summary {
+  margin-top: 8px !important;
+}
+
+/* PredictionChart wrapper marginBottom 제거 */
+.dashboard-col-left > div {
+  margin-bottom: 0;
 }
 
 .charts-grid-3 {
@@ -1816,6 +1903,185 @@ body::before {
   animation-delay: 0.3s;
 }
 
+/* ─── Derived Metrics ─── */
+.derived-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.derived-metric-item {
+  padding: 12px;
+  background: var(--bg-glass);
+  border-radius: 10px;
+  border: 1px solid var(--border-glass);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.derived-metric-item:hover {
+  border-color: rgba(56, 189, 248, 0.3);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.1);
+}
+.derived-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  padding: 14px 16px;
+  background: var(--bg-secondary, #1e293b);
+  border: 1px solid var(--border-glass);
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  animation: tooltipFadeIn 0.15s ease;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.derived-tooltip strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+@keyframes tooltipFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.derived-metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.derived-metric-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.derived-metric-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.derived-metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: monospace;
+}
+.derived-metric-unit {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.7;
+  margin-left: 2px;
+}
+.derived-metric-bar-track {
+  position: relative;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  margin-bottom: 6px;
+}
+.derived-metric-bar-optimal {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: rgba(16, 185, 129, 0.2);
+  border-radius: 3px;
+}
+.derived-metric-bar-marker {
+  position: absolute;
+  top: -3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  border: 2px solid var(--bg-card);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  transition: left 0.8s ease;
+}
+.derived-metric-desc {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.derived-metric-range {
+  font-family: monospace;
+  color: #10b981;
+  font-weight: 500;
+}
+.derived-bottom-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+.derived-info-card {
+  padding: 14px;
+  background: var(--bg-glass);
+  border-radius: 10px;
+  border: 1px solid var(--border-glass);
+}
+.derived-info-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.derived-info-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: monospace;
+  margin-bottom: 4px;
+}
+.derived-info-desc {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+.derived-rate-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.derived-rate-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.derived-rate-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.derived-warning {
+  margin-top: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+@media (max-width: 768px) {
+  .derived-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .derived-bottom-row {
+    grid-template-columns: 1fr;
+  }
+  .derived-metric-value {
+    font-size: 16px;
+  }
+  .derived-info-value {
+    font-size: 20px;
+  }
+}
+
 /* ─── AI Coach Chat ─── */
 .chat-container {
   display: flex;
@@ -2172,6 +2438,21 @@ body::before {
     font-size: 16px !important;  /* iOS는 16px 미만이면 자동 줌인 발생 */
   }
 
+  /* ── 대시보드 그리드 → 모바일 1컬럼 ── */
+  .dashboard-body {
+    grid-template-columns: 1fr !important;
+  }
+  .dashboard-col-left .charts-grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+  .dashboard-col-left .charts-grid-3 {
+    grid-template-columns: 1fr !important;
+  }
+  .dashboard-col-right .insight-row {
+    grid-template-columns: 1fr !important;
+  }
+
   /* ── 레이아웃 ── */
   .main-header {
     flex-direction: column;
@@ -2198,6 +2479,37 @@ body::before {
   .chart-card {
     padding: 14px;
     border-radius: 12px;
+  }
+
+  /* ── KPI 카드 가로 스크롤 ── */
+  .kpi-row-scroll-wrapper {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    /* 패딩으로 화면 왼쪽 끝에서 카드가 시작되도록 */
+    width: calc(100% + 24px);
+    margin-left: -12px;
+    padding-left: 12px;
+    padding-right: 24px;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+  }
+  .kpi-row-scroll-wrapper::-webkit-scrollbar {
+    display: none;
+  }
+  .kpi-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 12px;
+    width: max-content; /* 카드 개수에 맞춰 자동 확장 */
+  }
+  .kpi-card {
+    flex: 0 0 160px;   /* 카드 너비 고정 */
+    min-width: 160px;
+    padding: 16px;
+  }
+  .kpi-value {
+    font-size: 26px;
   }
 
   /* ── 테이블 ── */
@@ -2229,16 +2541,32 @@ body::before {
     font-size: 15px;
   }
 
-  /* ── 메트릭 카드 ── */
+  /* ── 메트릭 카드 (가로 스크롤) ── */
   .metrics-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    gap: 12px;
+    padding-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
+    width: 100vw;
+    margin-left: -12px;
+    padding-left: 12px;
+    padding-right: 24px;
+  }
+  .metrics-grid::-webkit-scrollbar {
+    display: none;
   }
   .metric-card {
-    padding: 14px;
+    min-width: 140px;
+    flex: 0 0 140px;
+    padding: 16px;
+    scroll-snap-align: start;
+    overflow: visible;
   }
-  .metric-value {
-    font-size: 22px;
+  .metric-card-value {
+    font-size: 24px;
   }
 
   /* ── 차트 레이블 ── */
@@ -2257,8 +2585,7 @@ body::before {
   .upload-card,
   .food-card,
   .workout-card {
-    max-width: 100%;
-    overflow-x: hidden;
+    max-width: 100vw;
     box-sizing: border-box;
   }
 

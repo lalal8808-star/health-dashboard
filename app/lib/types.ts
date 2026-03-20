@@ -117,4 +117,4 @@ export interface ChatMessage {
   createdAt: string;
 }
 
-export type TabType = 'dashboard' | 'upload' | 'history' | 'workout-diary' | 'food-diary' | 'compare' | 'chat';
+export type TabType = 'dashboard' | 'upload' | 'history' | 'workout-diary' | 'food-diary' | 'compare' | 'weekly-report' | 'notifications' | 'chat';

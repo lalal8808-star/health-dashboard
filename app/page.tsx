@@ -16,6 +16,10 @@ import WorkoutDiary from '@/app/components/WorkoutDiary';
 import AnalysisHistory from '@/app/components/AnalysisHistory';
 import StorageSync from '@/app/components/StorageSync';
 import DietChatbot from '@/app/components/DietChatbot';
+import WeeklyReport from '@/app/components/WeeklyReport';
+import ShareCard from '@/app/components/ShareCard';
+import SlackSettings from '@/app/components/SlackSettings';
+import DerivedMetrics from '@/app/components/DerivedMetrics';
 import {
   getRecords,
   saveRecord,
@@ -35,8 +39,10 @@ const TAB_HEADERS: Record<TabType, { title: string; subtitle: string }> = {
   upload: { title: '결과지 업로드', subtitle: 'AI가 자동으로 건강 지표를 분석합니다' },
   history: { title: '분석 기록', subtitle: '과거 분석 결과를 확인하세요' },
   compare: { title: '비교 분석', subtitle: '두 날짜의 건강 지표를 비교합니다' },
+  'weekly-report': { title: '주간 리포트', subtitle: '체성분·식단·운동 데이터를 종합 분석합니다' },
   'workout-diary': { title: '운동 일지', subtitle: '일별 운동을 기록하고 관리하세요' },
   'food-diary': { title: '식단 일지', subtitle: '일별 식단을 기록하고 관리하세요' },
+  notifications: { title: '알림 설정', subtitle: 'Slack 연동 및 알림을 설정합니다' },
   chat: { title: 'AI 코치', subtitle: '체성분·식단·운동 데이터 기반 맞춤 다이어트 코칭' },
 };
 
@@ -286,13 +292,26 @@ export default function Home() {
 
         {/* Dashboard View */}
         {activeTab === 'dashboard' && (
-          <div className="animate-fadeIn">
-            <MetricsCards records={records} />
-            <HealthCharts chartData={chartData} />
-            <PredictionChart chartData={chartData} />
-            <HealthRiskGauge records={records} />
-            <DashboardInsights records={records} />
-            <RawDataTable records={records} />
+          <div className="animate-fadeIn dashboard-layout">
+            {/* 상단: KPI 카드 */}
+            <div className="dashboard-top">
+              <MetricsCards records={records} />
+            </div>
+            {/* 하단: 2컬럼 그리드 */}
+            <div className="dashboard-body">
+              {/* 왼쪽: 체성분 차트 + 예측 */}
+              <div className="dashboard-col-left">
+                <HealthCharts chartData={chartData} />
+                <PredictionChart chartData={chartData} />
+              </div>
+              {/* 오른쪽: 위험도 + 파생지표 + 인사이트 + 데이터 테이블 */}
+              <div className="dashboard-col-right">
+                <HealthRiskGauge records={records} />
+                <DerivedMetrics records={records} />
+                <DashboardInsights records={records} />
+                <RawDataTable records={records} />
+              </div>
+            </div>
           </div>
         )}
 
@@ -325,12 +344,25 @@ export default function Home() {
 
         {/* Compare Analysis View */}
         {activeTab === 'compare' && (
-          <CompareAnalysis records={records} />
+          <div className="animate-fadeIn">
+            <CompareAnalysis records={records} />
+            <ShareCard records={records} />
+          </div>
+        )}
+
+        {/* Weekly Report View */}
+        {activeTab === 'weekly-report' && (
+          <WeeklyReport />
         )}
 
         {/* Food Diary View */}
         {activeTab === 'food-diary' && (
           <FoodDiary onGoToUpload={() => setActiveTab('upload')} />
+        )}
+
+        {/* Notifications View */}
+        {activeTab === 'notifications' && (
+          <SlackSettings />
         )}
 
         {/* AI Coach Chat View */}

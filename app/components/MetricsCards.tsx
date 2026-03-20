@@ -101,11 +101,13 @@ export default function MetricsCards({ records }: MetricsCardsProps) {
     };
 
     return (
-        <div className="kpi-row">
-            {renderCard('체중', latest.weight, 'kg', w, '#3b82f6', true)}
-            {renderCard('골격근량', latest.skeletalMuscle, 'kg', m, '#10b981', false)}
-            {renderCard('체지방량', latest.bodyFatMass, 'kg', f, '#ef4444', true)}
-            {renderCard('인바디 점수', latest.inbodyScore, '점', s, '#f59e0b', false, true)}
+        <div className="kpi-row-scroll-wrapper">
+            <div className="kpi-row">
+                {renderCard('체중', latest.weight, 'kg', w, '#3b82f6', true)}
+                {renderCard('골격근량', latest.skeletalMuscle, 'kg', m, '#10b981', false)}
+                {renderCard('체지방량', latest.bodyFatMass, 'kg', f, '#ef4444', true)}
+                {renderCard('인바디 점수', latest.inbodyScore, '점', s, '#f59e0b', false, true)}
+            </div>
         </div>
     );
 }

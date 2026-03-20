@@ -105,8 +105,10 @@ export default function PredictionChart({ chartData }: PredictionChartProps) {
                     <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginLeft: '8px' }}>선형 회귀 기반</span>
                 </div>
 
-                <ResponsiveContainer width="100%" height={250}>
-                    <LineChart data={extendedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '8px' }}>
+                    <div style={{ minWidth: extendedData.length > 7 ? `${extendedData.length * 45}px` : '100%', height: 250 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={extendedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                         <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} />
                         <YAxis tickLine={false} axisLine={false} tick={tickFont} domain={['auto', 'auto']} />
@@ -129,16 +131,18 @@ export default function PredictionChart({ chartData }: PredictionChartProps) {
                         <Line type="monotone" dataKey="weightPred" name="체중(예측)" stroke="#3b82f6" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 2, strokeDasharray: '' }} connectNulls />
                         <Line type="monotone" dataKey="skeletalMusclePred" name="골격근량(예측)" stroke="#10b981" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 2, strokeDasharray: '' }} connectNulls />
                         <Line type="monotone" dataKey="bodyFatPercentPred" name="체지방률(예측)" stroke="#ef4444" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 2, strokeDasharray: '' }} connectNulls />
-                    </LineChart>
-                </ResponsiveContainer>
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
             </div>
 
             {/* Prediction Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '12px' }}>
+            <div className="prediction-summary" style={{ display: 'flex', overflowX: 'auto', WebkitOverflowScrolling: 'touch', gap: '12px', marginTop: '12px', paddingBottom: '8px' }}>
                 {predictions.map((p) => {
                     if (!p) return null;
                     return (
-                        <div key={p.key as string} className="insight-card" style={{ borderLeft: `3px solid ${p.color}` }}>
+                        <div key={p.key as string} className="insight-card" style={{ borderLeft: `3px solid ${p.color}`, flex: '0 0 auto', minWidth: '240px' }}>
                             <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '8px' }}>{p.label} 예측</div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                                 <div>

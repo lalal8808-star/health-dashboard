@@ -1,6 +1,7 @@
 'use client';
 
 import { AnalysisRecord } from '@/app/lib/types';
+import { calcVisceralFatScore } from '@/app/lib/derived-metrics';
 
 interface HealthRiskGaugeProps {
     records: AnalysisRecord[];
@@ -14,11 +15,13 @@ function getRiskLevel(score: number): { label: string; color: string; emoji: str
     return { label: '위험', color: '#ef4444', emoji: '🔴' };
 }
 
-function calculateHealthScore(bmi: number | null, bodyFatPercent: number | null, waistHipRatio: number | null): {
+function calculateHealthScore(
+    bmi: number | null,
+    bodyFatPercent: number | null,
+    waistHipRatio: number | null,
+    visceralFatLevel: number | null,
+): {
     total: number;
-    bmiScore: number;
-    fatScore: number;
-    whrScore: number;
     details: { label: string; value: number | null; score: number; status: string; color: string }[];
 } {
     // BMI score (0-100): optimal 18.5-24.9
@@ -46,10 +49,14 @@ function calculateHealthScore(bmi: number | null, bodyFatPercent: number | null,
         else whrScore = Math.max(0, 100 - (waistHipRatio - 0.95) * 200);
     }
 
+    // Visceral fat score
+    const vf = calcVisceralFatScore(visceralFatLevel);
+
     const validScores = [
         bmi !== null ? bmiScore : null,
         bodyFatPercent !== null ? fatScore : null,
         waistHipRatio !== null ? whrScore : null,
+        visceralFatLevel !== null ? vf.score : null,
     ].filter(s => s !== null) as number[];
 
     const total = validScores.length > 0 ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) : 0;
@@ -58,17 +65,24 @@ function calculateHealthScore(bmi: number | null, bodyFatPercent: number | null,
     const fatStatus = bodyFatPercent === null ? '-' : bodyFatPercent <= 20 ? '정상' : bodyFatPercent <= 25 ? '경계' : '과다';
     const whrStatus = waistHipRatio === null ? '-' : waistHipRatio <= 0.85 ? '정상' : waistHipRatio <= 0.90 ? '경계' : '위험';
 
-    return {
-        total,
-        bmiScore,
-        fatScore,
-        whrScore,
-        details: [
-            { label: 'BMI', value: bmi, score: bmiScore, status: bmiStatus, color: getRiskLevel(bmiScore).color },
-            { label: '체지방률', value: bodyFatPercent, score: fatScore, status: fatStatus, color: getRiskLevel(fatScore).color },
-            { label: '복부지방률(WHR)', value: waistHipRatio, score: whrScore, status: whrStatus, color: getRiskLevel(whrScore).color },
-        ],
-    };
+    const details = [
+        { label: 'BMI', value: bmi, score: bmiScore, status: bmiStatus, color: getRiskLevel(bmiScore).color },
+        { label: '체지방률', value: bodyFatPercent, score: fatScore, status: fatStatus, color: getRiskLevel(fatScore).color },
+        { label: '복부지방률(WHR)', value: waistHipRatio, score: whrScore, status: whrStatus, color: getRiskLevel(whrScore).color },
+    ];
+
+    // 내장지방 레벨이 있으면 추가
+    if (visceralFatLevel !== null) {
+        details.push({
+            label: '내장지방',
+            value: visceralFatLevel,
+            score: vf.score,
+            status: vf.status,
+            color: vf.color,
+        });
+    }
+
+    return { total, details };
 }
 
 export default function HealthRiskGauge({ records }: HealthRiskGaugeProps) {
@@ -77,7 +91,7 @@ export default function HealthRiskGauge({ records }: HealthRiskGaugeProps) {
     const sorted = [...records].sort((a, b) => new Date(a.metrics.date).getTime() - new Date(b.metrics.date).getTime());
     const latest = sorted[sorted.length - 1].metrics;
 
-    const result = calculateHealthScore(latest.bmi, latest.bodyFatPercent, latest.waistHipRatio);
+    const result = calculateHealthScore(latest.bmi, latest.bodyFatPercent, latest.waistHipRatio, latest.visceralFatLevel);
     const risk = getRiskLevel(result.total);
 
     // Gauge angle: 0-180 degrees for 0-100 score
