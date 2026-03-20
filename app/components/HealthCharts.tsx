@@ -108,8 +108,9 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
             </div>
 
             {/* 2행 차트: 체지방률, 기초대사량, BMI+복부지방률 */}
-            <div className="charts-grid-3">
-                <div className="chart-card">
+            {/* inline style로 flex 강제: CSS 클래스가 Recharts ResizeObserver에 의해 grid로 부풀려지는 현상 방지 */}
+            <div className="charts-grid-3" style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: 0, width: '100%', overflow: 'hidden' }}>
+                <div className="chart-card" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
                     <div className="chart-title" style={{ marginBottom: '16px' }}>
                         <span className="dot" style={{ background: '#ef4444' }} />
                         체지방률 (%)
@@ -129,7 +130,7 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                     </div>
                 </div>
 
-                <div className="chart-card">
+                <div className="chart-card" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
                     <div className="chart-title" style={{ marginBottom: '16px' }}>
                         <span className="dot" style={{ background: '#8b5cf6' }} />
                         기초대사량 (kcal)
@@ -149,7 +150,7 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                     </div>
                 </div>
 
-                <div className="chart-card">
+                <div className="chart-card" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
                     <div className="chart-title" style={{ marginBottom: '16px' }}>
                         <span className="dot" style={{ background: '#06b6d4' }} />
                         BMI · 복부지방률

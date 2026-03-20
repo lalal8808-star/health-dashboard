@@ -740,10 +740,23 @@ body::before {
 }
 
 /* 왼쪽 컬럼: charts-grid-3를 1컬럼으로 (3개 세로 쌓기) */
+/* Recharts ResponsiveContainer가 grid column을 부풀리는 현상 방지:
+   display:flex + min-width:0 + overflow:hidden 조합으로 강제 봉쇄 */
 .dashboard-col-left .charts-grid-3 {
-  grid-template-columns: 1fr !important;
+  display: flex !important;
+  flex-direction: column !important;
   gap: 10px !important;
   margin-bottom: 0 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  width: 100% !important;
+}
+
+/* charts-grid-3 직접 자식(chart-card)도 폭 봉쇄 */
+.dashboard-col-left .charts-grid-3 > .chart-card {
+  min-width: 0 !important;
+  width: 100% !important;
+  overflow: hidden !important;
 }
 
 /* 컴팩트 차트 카드 */
