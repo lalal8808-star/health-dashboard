@@ -109,13 +109,13 @@ export default function HealthRiskGauge({ records }: HealthRiskGaugeProps) {
                 {/* Gauge */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <div style={{ position: 'relative', width: '200px', height: '110px', overflow: 'hidden' }}>
-                        {/* Background arc */}
+                        {/* Background arc: from 270deg(9시=0점) → 90deg(3시=100점) 시계방향 */}
                         <div style={{
                             position: 'absolute',
                             width: '200px',
                             height: '200px',
                             borderRadius: '50%',
-                            background: `conic-gradient(
+                            background: `conic-gradient(from 270deg,
                                 #ef4444 0deg 36deg,
                                 #f97316 36deg 72deg,
                                 #f59e0b 72deg 108deg,
@@ -123,7 +123,6 @@ export default function HealthRiskGauge({ records }: HealthRiskGaugeProps) {
                                 #10b981 144deg 180deg,
                                 transparent 180deg 360deg
                             )`,
-                            transform: 'rotate(180deg)',
                         }} />
                         {/* Inner circle */}
                         <div style={{
