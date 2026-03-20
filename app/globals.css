@@ -763,7 +763,7 @@ body::before {
 .dashboard-layout .chart-card {
   padding: 12px !important;
   margin-bottom: 0 !important;
-  overflow: hidden; /* 차트 SVG가 카드 밖으로 나와 옆 컬럼 덮는 현상 방지 */
+  /* overflow: hidden 제거 — DerivedMetrics 툴팁이 잘림. 차트 overflow는 charts-grid-3 컨테이너에서 처리 */
 }
 
 .dashboard-layout .chart-title {
