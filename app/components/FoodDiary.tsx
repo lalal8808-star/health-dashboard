@@ -17,6 +17,7 @@ import {
 
 interface FoodDiaryProps {
     onGoToUpload: () => void;
+    syncVersion?: number; // 외부 동기화 트리거 (값 변경 시 데이터 재로드)
 }
 
 type MealKey = 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -44,7 +45,7 @@ const toLocalDateStr = (d: Date): string => {
     return `${y}-${m}-${day}`;
 };
 
-export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProps) {
+export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: FoodDiaryProps) {
     // SSR 서버(UTC)와 클라이언트(KST) 날짜 불일치 방지:
     // useState 초기값은 SSR 빌드 시점에 고정될 수 있으므로, useEffect에서 클라이언트 날짜로 덮어씀
     const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
@@ -91,6 +92,14 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload }: FoodDiaryProp
 
 
     const refreshPresets = () => setPresets(getMealPresets());
+
+    // 외부 동기화(다른 기기 입력) 감지 시 데이터 재로드
+    useEffect(() => {
+        if (syncVersion === undefined || syncVersion === 0) return;
+        setFoodLog(getFoodLogByDate(selectedDate));
+        setFoodItems(getFoodItems());
+        setPresets(getMealPresets());
+    }, [syncVersion, selectedDate]);
 
     const changeDate = (delta: number) => {
         const d = new Date(selectedDate + 'T00:00:00');

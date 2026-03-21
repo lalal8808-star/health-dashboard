@@ -58,6 +58,7 @@ export default function Home() {
   const [initialized, setInitialized] = useState(false);
   const [csvResult, setCsvResult] = useState<CSVParseResult | null>(null);
   const [chatSyncVersion, setChatSyncVersion] = useState(0);
+  const [diarySyncVersion, setDiarySyncVersion] = useState(0);
 
   const refreshData = useCallback(() => {
     const allRecords = getRecords();
@@ -245,7 +246,11 @@ export default function Home() {
   return (
     <div className="app-container">
       {/* Server Sync (invisible) */}
-      <StorageSync onSynced={() => { refreshData(); setChatSyncVersion(v => v + 1); }} />
+      <StorageSync onSynced={() => {
+        refreshData();
+        setChatSyncVersion(v => v + 1);
+        setDiarySyncVersion(v => v + 1);
+      }} />
 
       {/* Mobile Header */}
       <div className="mobile-header">
@@ -339,7 +344,7 @@ export default function Home() {
 
         {/* Workout Diary View */}
         {activeTab === 'workout-diary' && (
-          <WorkoutDiary onGoToUpload={() => setActiveTab('upload')} />
+          <WorkoutDiary onGoToUpload={() => setActiveTab('upload')} syncVersion={diarySyncVersion} />
         )}
 
         {/* Compare Analysis View */}
@@ -357,7 +362,7 @@ export default function Home() {
 
         {/* Food Diary View */}
         {activeTab === 'food-diary' && (
-          <FoodDiary onGoToUpload={() => setActiveTab('upload')} />
+          <FoodDiary onGoToUpload={() => setActiveTab('upload')} syncVersion={diarySyncVersion} />
         )}
 
         {/* Notifications View */}

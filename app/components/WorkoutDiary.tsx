@@ -12,6 +12,7 @@ import { Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface WorkoutDiaryProps {
     onGoToUpload: () => void;
+    syncVersion?: number;
 }
 
 /** 로컬 날짜를 YYYY-MM-DD 형식으로 반환 (toISOString은 UTC 기준이라 한국에서 날짜 밀림) */
@@ -22,7 +23,7 @@ const toLocalDateStr = (d: Date): string => {
     return `${y}-${m}-${day}`;
 };
 
-export default function WorkoutDiary({ onGoToUpload: _onGoToUpload }: WorkoutDiaryProps) {
+export default function WorkoutDiary({ onGoToUpload: _onGoToUpload, syncVersion }: WorkoutDiaryProps) {
     const ssrToday = new Date();
     // SSR 빌드 시점 날짜 오염 방지: useEffect에서 클라이언트 로컬 날짜로 덮어씀
     const [currentMonth, setCurrentMonth] = useState({ year: ssrToday.getFullYear(), month: ssrToday.getMonth() });
@@ -53,6 +54,12 @@ export default function WorkoutDiary({ onGoToUpload: _onGoToUpload }: WorkoutDia
         const d = new Date();
         setCurrentMonth({ year: d.getFullYear(), month: d.getMonth() });
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // 외부 동기화(다른 기기 입력) 감지 시 데이터 재로드
+    useEffect(() => {
+        if (syncVersion === undefined || syncVersion === 0) return;
+        setWorkoutLog(getWorkoutLogByDate(selectedDate));
+    }, [syncVersion, selectedDate]);
 
     const handleDateSelect = (date: string) => {
         setSelectedDate(date);
