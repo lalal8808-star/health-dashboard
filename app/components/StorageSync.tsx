@@ -8,7 +8,7 @@ interface StorageSyncProps {
     onSynced?: () => void;
 }
 
-const POLL_INTERVAL_MS = 30_000; // 30초마다 재동기화
+const POLL_INTERVAL_MS = 300_000; // 5분마다 재동기화 (Vercel 무료 한도 절약)
 
 /**
  * 페이지 마운트 시 + 탭 활성화 시 + 30초마다 서버 데이터를 동기화.

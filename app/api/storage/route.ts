@@ -52,9 +52,57 @@ async function kvSet(key: string, value: unknown): Promise<void> {
     }
 }
 
-// GET /api/storage?key=...  → Redis에서 JSON 반환
+// 모든 키를 한 번에 읽기 (Upstash pipeline 1회로 6개 키 전부)
+async function kvGetAll(): Promise<Record<string, unknown>> {
+    if (!REDIS_URL || !REDIS_TOKEN) return {};
+    try {
+        const keys = Array.from(ALLOWED_KEYS);
+        const pipeline = keys.map(k => ['GET', k]);
+        const res = await fetch(`${REDIS_URL}/pipeline`, {
+            method: 'POST',
+            headers: headers(),
+            body: JSON.stringify(pipeline),
+            cache: 'no-store',
+        });
+        const json = await res.json() as Array<{ result?: string | null }>;
+        const result: Record<string, unknown> = {};
+        keys.forEach((key, i) => {
+            const raw = json[i]?.result;
+            result[key] = raw ? JSON.parse(raw) : null;
+        });
+        return result;
+    } catch {
+        return {};
+    }
+}
+
+// 여러 키를 한 번에 저장 (Upstash pipeline 1회)
+async function kvSetMulti(entries: Record<string, unknown>): Promise<void> {
+    if (!REDIS_URL || !REDIS_TOKEN) return;
+    try {
+        const pipeline = Object.entries(entries).map(
+            ([key, value]) => ['SET', key, JSON.stringify(value)]
+        );
+        await fetch(`${REDIS_URL}/pipeline`, {
+            method: 'POST',
+            headers: headers(),
+            body: JSON.stringify(pipeline),
+        });
+    } catch (e) {
+        console.error('[storage] kvSetMulti error:', e);
+    }
+}
+
+// GET /api/storage?key=...  → 단일 키 또는 key=all로 전체 배치
 export async function GET(req: NextRequest) {
     const key = req.nextUrl.searchParams.get('key');
+
+    // 배치 모드: /api/storage?key=all → 모든 키 한 번에 반환
+    if (key === 'all') {
+        const data = await kvGetAll();
+        return NextResponse.json(data);
+    }
+
     if (!key || !ALLOWED_KEYS.has(key)) {
         return NextResponse.json(null);
     }
@@ -63,8 +111,29 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/storage?key=...  body: JSON → Redis에 저장
+// POST /api/storage?key=batch  body: { "key1": data1, "key2": data2, ... } → 배치 저장
 export async function POST(req: NextRequest) {
     const key = req.nextUrl.searchParams.get('key');
+
+    // 배치 모드: 여러 키를 한 번에 저장
+    if (key === 'batch') {
+        try {
+            const entries = await req.json() as Record<string, unknown>;
+            // 허용된 키만 필터
+            const valid: Record<string, unknown> = {};
+            for (const [k, v] of Object.entries(entries)) {
+                if (ALLOWED_KEYS.has(k)) valid[k] = v;
+            }
+            if (Object.keys(valid).length > 0) {
+                await kvSetMulti(valid);
+            }
+            return NextResponse.json({ success: true });
+        } catch (e) {
+            console.error('[storage] batch POST error:', e);
+            return NextResponse.json({ error: 'Batch write failed' }, { status: 500 });
+        }
+    }
+
     if (!key || !ALLOWED_KEYS.has(key)) {
         return NextResponse.json({ error: 'Invalid key' }, { status: 400 });
     }

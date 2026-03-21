@@ -3,10 +3,10 @@
 /**
  * 서버(Redis) <-> localStorage 양방향 동기화
  *
- * 전략:
- * - 쓰기: localStorage 즉시 저장 + 백그라운드 서버 저장 (fire-and-forget)
- * - 읽기(초기화): 서버 데이터와 로컬 데이터를 스마트 병합 (더 많은 쪽 보존)
- *   → 병합 결과가 서버보다 크면 서버에도 역업로드 (다른 기기에 전파)
+ * 최적화 v2:
+ * - 읽기: /api/storage?key=all 배치 API (6개 키를 1 요청으로)
+ * - 쓰기: 2초 디바운스 + 배치 POST (연속 저장을 모아 1 요청으로)
+ * - 병합: 스마트 양방향 merge (서버+로컬 유니온)
  */
 
 const SYNC_KEYS = [
@@ -20,38 +20,47 @@ const SYNC_KEYS = [
 
 export type SyncKey = typeof SYNC_KEYS[number];
 
-/** localStorage 저장 + 백그라운드 서버 동기화 */
-export function syncedSetItem(key: SyncKey, data: unknown): void {
-    localStorage.setItem(key, JSON.stringify(data));
-    fetch(`/api/storage?key=${key}`, {
+// ── 쓰기 디바운싱 ──────────────────────────────────────
+// 2초 안에 여러 키가 저장되면 한 번의 batch POST로 전송
+const pendingWrites = new Map<SyncKey, unknown>();
+let writeTimer: ReturnType<typeof setTimeout> | null = null;
+const WRITE_DEBOUNCE_MS = 2_000;
+
+function flushWrites() {
+    if (pendingWrites.size === 0) return;
+    const entries: Record<string, unknown> = {};
+    pendingWrites.forEach((data, key) => { entries[key] = data; });
+    pendingWrites.clear();
+    writeTimer = null;
+
+    fetch('/api/storage?key=batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(entries),
     }).catch(() => {});
 }
 
-/**
- * 두 배열을 ID 기준으로 병합 (양쪽의 유니크 항목을 모두 보존)
- * - 같은 ID가 있으면 로컬 우선 (더 최신 수정 가능)
- * - 정렬이 필요하면 sortFn 사용
- */
+/** localStorage 저장 + 2초 디바운스 후 서버 배치 동기화 */
+export function syncedSetItem(key: SyncKey, data: unknown): void {
+    localStorage.setItem(key, JSON.stringify(data));
+    pendingWrites.set(key, data);
+    if (writeTimer) clearTimeout(writeTimer);
+    writeTimer = setTimeout(flushWrites, WRITE_DEBOUNCE_MS);
+}
+
+// ── 스마트 병합 ──────────────────────────────────────
 function mergeById<T extends { id: string }>(
     server: T[],
     local: T[],
     sortFn?: (a: T, b: T) => number
 ): T[] {
     const map = new Map<string, T>();
-    // 서버 먼저, 로컬이 덮어씀 (로컬 = 더 최신)
     server.forEach(r => { if (r?.id) map.set(r.id, r); });
     local.forEach(r => { if (r?.id) map.set(r.id, r); });
     const merged = Array.from(map.values());
     return sortFn ? merged.sort(sortFn) : merged;
 }
 
-/**
- * 두 배열을 날짜(date) 기준으로 병합
- * - 같은 날짜면 로컬 우선
- */
 function mergeByDate<T extends { date: string }>(server: T[], local: T[]): T[] {
     const map = new Map<string, T>();
     server.forEach(r => { if (r?.date) map.set(r.date, r); });
@@ -59,19 +68,13 @@ function mergeByDate<T extends { date: string }>(server: T[], local: T[]): T[] {
     return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/**
- * 키에 따라 적절한 병합 전략 선택
- */
 function smartMerge(key: SyncKey, serverData: unknown, localData: unknown): unknown {
-    // 둘 다 배열이어야 merge 가능
     if (!Array.isArray(serverData) || !Array.isArray(localData)) {
-        // 배열이 아니면 null이 아닌 쪽 사용, 둘 다 있으면 로컬 우선
         if (serverData !== null && serverData !== undefined && localData === null) return serverData;
         return localData ?? serverData;
     }
 
     if (key === 'health-dashboard-records') {
-        // InBody 기록: ID 기반 merge + 날짜순 정렬
         return mergeById(
             serverData as { id: string }[],
             localData as { id: string }[],
@@ -81,23 +84,17 @@ function smartMerge(key: SyncKey, serverData: unknown, localData: unknown): unkn
     }
 
     if (key === 'health-dashboard-food-logs' || key === 'health-dashboard-workout-logs') {
-        // 일지: 날짜 기반 merge
         return mergeByDate(
             serverData as { date: string }[],
             localData as { date: string }[]
         );
     }
 
-    if (
-        key === 'health-dashboard-meal-presets' ||
-        key === 'health-dashboard-food-items'
-    ) {
-        // ID 기반 merge
+    if (key === 'health-dashboard-meal-presets' || key === 'health-dashboard-food-items') {
         return mergeById(serverData as { id: string }[], localData as { id: string }[]);
     }
 
     if (key === 'health-dashboard-chat-messages') {
-        // 채팅: ID 기반 merge + 시간순 정렬
         return mergeById(
             serverData as { id: string }[],
             localData as { id: string }[],
@@ -106,60 +103,56 @@ function smartMerge(key: SyncKey, serverData: unknown, localData: unknown): unkn
         );
     }
 
-    // 기본: 더 많은 배열 우선
     return serverData.length >= localData.length ? serverData : localData;
 }
 
+// ── 서버 동기화 (배치 API 사용) ──────────────────────────────
 /**
- * 페이지 로드 시 호출: 서버 ↔ 로컬 양방향 스마트 병합
+ * 페이지 로드 / 탭 전환 시 호출: 서버 ↔ 로컬 양방향 스마트 병합
+ * 1 GET 요청으로 모든 키를 읽음 (기존 6 GET → 1 GET)
  */
 export async function syncFromServer(): Promise<void> {
-    await Promise.allSettled(
-        SYNC_KEYS.map(async (key) => {
-            try {
-                const res = await fetch(`/api/storage?key=${key}`, { cache: 'no-store' });
-                if (!res.ok) return;
-                const serverData = await res.json();
+    try {
+        const res = await fetch('/api/storage?key=all', { cache: 'no-store' });
+        if (!res.ok) return;
+        const serverAll = await res.json() as Record<string, unknown>;
 
-                // 로컬 데이터 읽기
-                const localRaw = localStorage.getItem(key);
-                const localData = localRaw ? JSON.parse(localRaw) : null;
+        const toUpload: Record<string, unknown> = {};
 
-                if (serverData === null) {
-                    // 서버에 데이터 없음 → 로컬 데이터 서버에 업로드
-                    if (localData !== null) {
-                        fetch(`/api/storage?key=${key}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(localData),
-                        }).catch(() => {});
-                    }
-                    return;
-                }
+        for (const key of SYNC_KEYS) {
+            const serverData = serverAll[key] ?? null;
+            const localRaw = localStorage.getItem(key);
+            const localData = localRaw ? JSON.parse(localRaw) : null;
 
-                if (localData === null) {
-                    // 로컬에 데이터 없음 → 서버 데이터로 로컬 채우기
-                    localStorage.setItem(key, JSON.stringify(serverData));
-                    return;
-                }
-
-                // 양쪽에 데이터 있음 → 스마트 병합
-                const merged = smartMerge(key, serverData, localData);
-                localStorage.setItem(key, JSON.stringify(merged));
-
-                // 병합 결과가 서버보다 크면 역업로드 (다른 기기에 전파)
-                const serverLen = Array.isArray(serverData) ? serverData.length : 0;
-                const mergedLen = Array.isArray(merged) ? merged.length : 0;
-                if (mergedLen > serverLen) {
-                    fetch(`/api/storage?key=${key}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(merged),
-                    }).catch(() => {});
-                }
-            } catch {
-                // 네트워크 오류 → localStorage로 그대로 동작
+            if (serverData === null) {
+                if (localData !== null) toUpload[key] = localData;
+                continue;
             }
-        })
-    );
+
+            if (localData === null) {
+                localStorage.setItem(key, JSON.stringify(serverData));
+                continue;
+            }
+
+            const merged = smartMerge(key as SyncKey, serverData, localData);
+            localStorage.setItem(key, JSON.stringify(merged));
+
+            const serverLen = Array.isArray(serverData) ? serverData.length : 0;
+            const mergedLen = Array.isArray(merged) ? merged.length : 0;
+            if (mergedLen > serverLen) {
+                toUpload[key] = merged;
+            }
+        }
+
+        // 역업로드가 필요한 키들 배치 전송 (1 POST)
+        if (Object.keys(toUpload).length > 0) {
+            fetch('/api/storage?key=batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(toUpload),
+            }).catch(() => {});
+        }
+    } catch {
+        // 네트워크 오류 → localStorage로 그대로 동작
+    }
 }
