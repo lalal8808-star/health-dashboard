@@ -1,7 +1,7 @@
 'use client';
 
 import { FoodEntry, DailyFoodLog, MealPreset, MealPresetEntry, FoodItem } from './types';
-import { syncedSetItem } from './storage-sync';
+import { syncedSetItem, syncedSetItemNow } from './storage-sync';
 
 const FOOD_STORAGE_KEY = 'health-dashboard-food-logs' as const;
 
@@ -39,7 +39,8 @@ export function deleteFoodEntry(date: string, entryId: string): void {
         if (logs[idx].entries.length === 0) {
             logs.splice(idx, 1);
         }
-        syncedSetItem(FOOD_STORAGE_KEY, logs);
+        // 삭제는 즉시 서버 반영 (디바운스 없음 - sync 경쟁 방지)
+        syncedSetItemNow(FOOD_STORAGE_KEY, logs);
     }
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { WorkoutLog, WorkoutEntry } from './types';
-import { syncedSetItem } from './storage-sync';
+import { syncedSetItem, syncedSetItemNow } from './storage-sync';
 
 const WORKOUT_STORAGE_KEY = 'health-dashboard-workout-logs' as const;
 
@@ -39,7 +39,8 @@ export function deleteWorkoutEntry(date: string, entryId: string): void {
         if (logs[idx].entries.length === 0) {
             logs.splice(idx, 1);
         }
-        syncedSetItem(WORKOUT_STORAGE_KEY, logs);
+        // 삭제는 즉시 서버 반영 (디바운스 없음 - sync 경쟁 방지)
+        syncedSetItemNow(WORKOUT_STORAGE_KEY, logs);
     }
 }
 

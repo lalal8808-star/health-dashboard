@@ -48,6 +48,16 @@ export function syncedSetItem(key: SyncKey, data: unknown): void {
     writeTimer = setTimeout(flushWrites, WRITE_DEBOUNCE_MS);
 }
 
+/** localStorage 저장 + 즉시 서버 업로드 (삭제 등 즉시 반영이 필요한 경우) */
+export function syncedSetItemNow(key: SyncKey, data: unknown): void {
+    localStorage.setItem(key, JSON.stringify(data));
+    // 대기 중인 디바운스 취소 후 해당 키를 포함해 즉시 flush
+    if (writeTimer) clearTimeout(writeTimer);
+    writeTimer = null;
+    pendingWrites.set(key, data);
+    flushWrites();
+}
+
 // ── 스마트 병합 ──────────────────────────────────────
 function mergeById<T extends { id: string }>(
     server: T[],
@@ -128,6 +138,11 @@ function smartMerge(key: SyncKey, serverData: unknown, localData: unknown): unkn
  * 1 GET 요청으로 모든 키를 읽음 (기존 6 GET → 1 GET)
  */
 export async function syncFromServer(): Promise<void> {
+    // 대기 중인 로컬 변경사항(삭제 포함)을 먼저 서버에 올린 후 읽기
+    if (pendingWrites.size > 0) {
+        flushWrites();
+        await new Promise(r => setTimeout(r, 300)); // flush가 서버에 반영될 시간
+    }
     try {
         const res = await fetch('/api/storage?key=all', { cache: 'no-store' });
         if (!res.ok) return;
