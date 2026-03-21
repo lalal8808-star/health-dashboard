@@ -30,6 +30,14 @@ export default function WorkoutDiary({ onGoToUpload: _onGoToUpload, syncVersion 
     const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
     const [showForm, setShowForm] = useState(false);
     const [workoutLog, setWorkoutLog] = useState(() => getWorkoutLogByDate(new Date().toISOString().split('T')[0]));
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 640);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
 
     const monthlyLogs = getMonthlyWorkoutLogs(currentMonth.year, currentMonth.month);
 
@@ -131,7 +139,7 @@ export default function WorkoutDiary({ onGoToUpload: _onGoToUpload, syncVersion 
         const monthLabel = `${currentMonth.year}년 ${currentMonth.month + 1}월`;
 
         return (
-            <div className="chart-card" style={{ marginBottom: '24px' }}>
+            <div className="chart-card" style={{ marginBottom: '24px', overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <button className="btn btn-secondary btn-sm" onClick={() => changeMonth(-1)}>
                         <ChevronLeft size={16} />
@@ -143,9 +151,9 @@ export default function WorkoutDiary({ onGoToUpload: _onGoToUpload, syncVersion 
                 </div>
 
                 {/* Day headers */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '4px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '2px' }}>
                     {dayLabels.map(d => (
-                        <div key={d} style={{ textAlign: 'center', fontSize: '11px', color: 'var(--text-tertiary)', padding: '4px' }}>
+                        <div key={d} style={{ textAlign: 'center', fontSize: '11px', color: 'var(--text-tertiary)', padding: isMobile ? '2px 0' : '4px' }}>
                             {d}
                         </div>
                     ))}
@@ -153,9 +161,9 @@ export default function WorkoutDiary({ onGoToUpload: _onGoToUpload, syncVersion 
 
                 {/* Weeks */}
                 {weeks.map((week, wi) => (
-                    <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '4px' }}>
+                    <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '2px' }}>
                         {week.map((day, di) => {
-                            if (day === null) return <div key={di} style={{ minHeight: '76px' }} />;
+                            if (day === null) return <div key={di} style={{ minHeight: isMobile ? '44px' : '72px' }} />;
 
                             const dateStr = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                             const isSelected = dateStr === selectedDate;
@@ -168,8 +176,8 @@ export default function WorkoutDiary({ onGoToUpload: _onGoToUpload, syncVersion 
                                     key={di}
                                     onClick={() => handleDateSelect(dateStr)}
                                     style={{
-                                        minHeight: '76px',
-                                        padding: '6px 4px',
+                                        minHeight: isMobile ? '44px' : '72px',
+                                        padding: isMobile ? '4px 2px' : '6px 4px',
                                         borderRadius: '8px',
                                         cursor: 'pointer',
                                         background: isSelected ? 'rgba(59,130,246,0.15)' : 'transparent',
@@ -178,41 +186,61 @@ export default function WorkoutDiary({ onGoToUpload: _onGoToUpload, syncVersion 
                                         display: 'flex',
                                         flexDirection: 'column',
                                         alignItems: 'center',
-                                        gap: '3px',
+                                        gap: isMobile ? '4px' : '3px',
+                                        boxSizing: 'border-box',
                                     }}
                                 >
                                     {/* Date number */}
                                     <span style={{
-                                        fontSize: '13px',
+                                        fontSize: isMobile ? '12px' : '13px',
                                         fontWeight: isSelected ? 700 : 400,
                                         color: isSelected ? 'var(--accent-blue)' : 'var(--text-primary)',
+                                        lineHeight: 1,
                                     }}>
                                         {day}
                                     </span>
 
-                                    {/* Workout entries on calendar */}
-                                    {entries.slice(0, MAX_SHOW).map((entry) => (
-                                        <div key={entry.id} style={{
-                                            width: '100%',
-                                            fontSize: '11px',
-                                            lineHeight: '1.4',
-                                            color: '#10b981',
-                                            background: 'rgba(16,185,129,0.15)',
-                                            borderRadius: '3px',
-                                            padding: '2px 4px',
-                                            overflow: 'hidden',
-                                            whiteSpace: 'nowrap',
-                                            textOverflow: 'ellipsis',
-                                            textAlign: 'left',
-                                            fontWeight: 600,
-                                        }}>
-                                            {entry.name}{entry.duration ? ` · ${entry.duration}` : ''}
-                                        </div>
-                                    ))}
-                                    {entries.length > MAX_SHOW && (
-                                        <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
-                                            +{entries.length - MAX_SHOW}
-                                        </div>
+                                    {/* 모바일: 점(dot)으로 표시 / 데스크탑: 텍스트 칩 */}
+                                    {isMobile ? (
+                                        entries.length > 0 && (
+                                            <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                                {entries.slice(0, 3).map((entry) => (
+                                                    <div key={entry.id} style={{
+                                                        width: '6px',
+                                                        height: '6px',
+                                                        borderRadius: '50%',
+                                                        background: '#10b981',
+                                                        flexShrink: 0,
+                                                    }} />
+                                                ))}
+                                            </div>
+                                        )
+                                    ) : (
+                                        <>
+                                            {entries.slice(0, MAX_SHOW).map((entry) => (
+                                                <div key={entry.id} style={{
+                                                    width: '100%',
+                                                    fontSize: '11px',
+                                                    lineHeight: '1.4',
+                                                    color: '#10b981',
+                                                    background: 'rgba(16,185,129,0.15)',
+                                                    borderRadius: '3px',
+                                                    padding: '2px 4px',
+                                                    overflow: 'hidden',
+                                                    whiteSpace: 'nowrap',
+                                                    textOverflow: 'ellipsis',
+                                                    textAlign: 'left',
+                                                    fontWeight: 600,
+                                                }}>
+                                                    {entry.name}{entry.duration ? ` · ${entry.duration}` : ''}
+                                                </div>
+                                            ))}
+                                            {entries.length > MAX_SHOW && (
+                                                <div style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>
+                                                    +{entries.length - MAX_SHOW}
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             );
