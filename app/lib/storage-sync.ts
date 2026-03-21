@@ -64,7 +64,23 @@ function mergeById<T extends { id: string }>(
 function mergeByDate<T extends { date: string }>(server: T[], local: T[]): T[] {
     const map = new Map<string, T>();
     server.forEach(r => { if (r?.date) map.set(r.date, r); });
-    local.forEach(r => { if (r?.date) map.set(r.date, r); });
+    // 같은 날짜가 있으면: entries(음식/운동 항목)가 더 많은 쪽을 유지
+    local.forEach(r => {
+        if (!r?.date) return;
+        const existing = map.get(r.date);
+        if (!existing) {
+            map.set(r.date, r);
+        } else {
+            const existingEntries = (existing as any).entries;
+            const localEntries = (r as any).entries;
+            const existingLen = Array.isArray(existingEntries) ? existingEntries.length : 0;
+            const localLen = Array.isArray(localEntries) ? localEntries.length : 0;
+            if (localLen >= existingLen) {
+                map.set(r.date, r);
+            }
+            // 서버 entries가 더 많으면 서버 유지 (덮어쓰지 않음)
+        }
+    });
     return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
