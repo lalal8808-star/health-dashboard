@@ -91,7 +91,9 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
 
     useEffect(() => {
         const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
-        setMicAvailable(!!SR);
+        // getUserMedia 지원 여부도 확인 (iOS 포함)
+        const hasGetUserMedia = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+        setMicAvailable(!!(SR && hasGetUserMedia));
     }, []);
 
     useEffect(() => {
@@ -216,7 +218,7 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
         }
     };
 
-    const toggleMic = () => {
+    const toggleMic = async () => {
         if (isListening) {
             recognitionRef.current?.stop();
             setIsListening(false);
@@ -224,7 +226,18 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
         }
 
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SR) return;
+        if (!SR) {
+            alert('이 브라우저는 음성 입력을 지원하지 않습니다.\n(Chrome 또는 Safari를 사용해 주세요)');
+            return;
+        }
+
+        // 마이크 권한 명시적 요청
+        try {
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch {
+            alert('마이크 권한이 필요합니다.\n브라우저 설정에서 마이크 접근을 허용해 주세요.');
+            return;
+        }
 
         const recognition = new SR();
         recognition.lang = 'ko-KR';
@@ -243,12 +256,25 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
             }
         };
 
-        recognition.onerror = () => setIsListening(false);
+        recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
+            setIsListening(false);
+            if (e.error === 'not-allowed') {
+                alert('마이크 권한이 거부되었습니다.\n브라우저 설정에서 마이크 접근을 허용해 주세요.');
+            } else if (e.error === 'no-speech') {
+                // 말을 안 한 경우 - 조용히 종료
+            } else {
+                alert(`음성 인식 오류: ${e.error}\n다시 시도해 주세요.`);
+            }
+        };
         recognition.onend = () => setIsListening(false);
 
         recognitionRef.current = recognition;
-        recognition.start();
-        setIsListening(true);
+        try {
+            recognition.start();
+            setIsListening(true);
+        } catch {
+            alert('음성 인식을 시작할 수 없습니다. 다시 시도해 주세요.');
+        }
     };
 
     const handleClear = () => {
