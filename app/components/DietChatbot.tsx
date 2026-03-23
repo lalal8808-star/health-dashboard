@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Trash2, Bot, User, Loader2, Mic, MicOff, StopCircle, Share2, Check, ImagePlus, X } from 'lucide-react';
+import { Send, Trash2, Bot, User, Loader2, Mic, MicOff, StopCircle, Share2, Check, ImagePlus, Camera, X } from 'lucide-react';
 import { ChatMessage } from '@/app/lib/types';
 import { getChatMessages, saveChatMessage, clearChatMessages } from '@/app/lib/chat-storage';
 import { getRecords } from '@/app/lib/storage';
@@ -63,10 +63,12 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
     const [isListening, setIsListening] = useState(false);
     const [micAvailable, setMicAvailable] = useState(false);
     const [pendingImage, setPendingImage] = useState<{ base64: string; mimeType: string; preview: string } | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
 
     // Force re-render when module state changes
     useEffect(() => {
@@ -115,9 +117,7 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
         workoutLogs: getWorkoutLogs(),
     }), []);
 
-    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const processImageFile = useCallback((file: File) => {
         if (!file.type.startsWith('image/')) {
             alert('이미지 파일만 업로드할 수 있습니다.');
             return;
@@ -133,8 +133,30 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
             setPendingImage({ base64, mimeType: file.type, preview: dataUrl });
         };
         reader.readAsDataURL(file);
+    }, []);
+
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) processImageFile(file);
         e.target.value = '';
     };
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) processImageFile(file);
+    }, [processImageFile]);
+
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+    }, []);
+
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+    }, []);
 
     const handleSend = async (textOverride?: string) => {
         const text = (textOverride ?? input).trim();
@@ -408,7 +430,12 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
     const isStreaming = _isStreaming;
 
     return (
-        <div className="chat-container">
+        <div className="chat-container"
+            style={{ position: 'relative' }}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+        >
             {/* Header */}
             <div className="chat-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -426,6 +453,21 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
                     </button>
                 )}
             </div>
+
+            {/* Drag overlay */}
+            {isDragging && (
+                <div style={{
+                    position: 'absolute', inset: 0, zIndex: 50,
+                    background: 'rgba(59,130,246,0.15)', backdropFilter: 'blur(2px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: '3px dashed var(--accent-blue)', borderRadius: '16px',
+                    pointerEvents: 'none',
+                }}>
+                    <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--accent-blue)' }}>
+                        📷 여기에 이미지를 놓으세요
+                    </div>
+                </div>
+            )}
 
             {/* Messages */}
             <div className="chat-messages">
@@ -545,6 +587,14 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
                         onChange={handleImageSelect}
                         style={{ display: 'none' }}
                     />
+                    <input
+                        ref={cameraInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleImageSelect}
+                        style={{ display: 'none' }}
+                    />
                     {!isStreaming && (
                         <button
                             className="chat-mic-btn"
@@ -553,6 +603,16 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
                             type="button"
                         >
                             <ImagePlus size={18} />
+                        </button>
+                    )}
+                    {!isStreaming && (
+                        <button
+                            className="chat-mic-btn"
+                            onClick={() => cameraInputRef.current?.click()}
+                            title="카메라 촬영"
+                            type="button"
+                        >
+                            <Camera size={18} />
                         </button>
                     )}
                     {micAvailable && !isStreaming && (
