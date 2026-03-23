@@ -35,14 +35,19 @@ interface ChatRequestBody {
     };
 }
 
+function getKSTDateString(offsetDays = 0): string {
+    const now = new Date();
+    // KST = UTC+9
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    kst.setUTCDate(kst.getUTCDate() - offsetDays);
+    return kst.toISOString().split('T')[0];
+}
+
 function findMissingFoodDays(foodLogs: any[], days = 7): string[] {
-    const today = new Date();
     const loggedDates = new Set((foodLogs || []).map((l: any) => l.date));
     const missing: string[] = [];
     for (let i = 0; i < days; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
+        const dateStr = getKSTDateString(i);
         if (!loggedDates.has(dateStr)) missing.push(dateStr);
     }
     return missing;
