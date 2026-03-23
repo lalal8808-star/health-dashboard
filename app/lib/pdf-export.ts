@@ -442,6 +442,33 @@ export async function exportDashboardPDF() {
 
         updateProgress('Gemini AI에게 분석 요청 중...');
 
+        // Build summary object (same format as WeeklyReport)
+        const latest = sorted[sorted.length - 1]?.metrics;
+        const prev = sorted.length > 1 ? sorted[sorted.length - 2]?.metrics : null;
+        const recentFoodLogs = foodLogs.slice(-7);
+        const avgCalories = recentFoodLogs.length > 0
+            ? Math.round(recentFoodLogs.reduce((s, l) => s + l.entries.reduce((es: number, e: any) => es + (e.calories || 0), 0), 0) / recentFoodLogs.length)
+            : 0;
+        const avgProtein = recentFoodLogs.length > 0
+            ? Math.round(recentFoodLogs.reduce((s, l) => s + l.entries.reduce((es: number, e: any) => es + (e.protein || 0), 0), 0) / recentFoodLogs.length)
+            : 0;
+        const recentWorkouts = workoutLogs.slice(-7);
+
+        const summary = {
+            period: `최근 ${sorted.length}회 측정`,
+            body: latest && prev ? {
+                weightDelta: +((latest.weight ?? 0) - (prev.weight ?? 0)).toFixed(1),
+                muscleDelta: +((latest.skeletalMuscle ?? 0) - (prev.skeletalMuscle ?? 0)).toFixed(1),
+                fatDelta: +((latest.bodyFatMass ?? 0) - (prev.bodyFatMass ?? 0)).toFixed(1),
+                scoreDelta: (latest.inbodyScore ?? 0) - (prev.inbodyScore ?? 0),
+            } : null,
+            food: avgCalories > 0 ? { avgCalories, avgProtein, avgCarbs: 0, avgFat: 0 } : null,
+            workout: recentWorkouts.length > 0 ? {
+                workoutDays: recentWorkouts.length,
+                totalExercises: recentWorkouts.reduce((s, l) => s + l.entries.length, 0),
+            } : null,
+        };
+
         // 60초 타임아웃
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 60000);
@@ -451,7 +478,7 @@ export async function exportDashboardPDF() {
             res = await fetch('/api/report', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ healthData: { records, foodLogs, workoutLogs } }),
+                body: JSON.stringify({ summary }),
                 signal: controller.signal,
             });
         } finally {
