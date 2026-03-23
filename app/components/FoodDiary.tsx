@@ -507,9 +507,6 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
                                 🥗 영양소 밸런스
                                 <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 400 }}>🏋️ 다이어트 비율: 단30:탄40:지30 (TDEE-500kcal 기준)</span>
                             </div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
-                                🥩 단백질 120~140g · 🍎 탄수화물 100~130g · 🥑 지방 40~60g
-                            </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
                             <div style={{ width: 110, height: 110, flexShrink: 0, position: 'relative' }}>
