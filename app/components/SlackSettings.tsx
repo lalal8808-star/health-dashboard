@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, Send, Check, AlertCircle, Loader2, Link2, RefreshCw } from 'lucide-react';
 
 interface SlackSettingsData {
@@ -31,6 +31,8 @@ export default function SlackSettings() {
     const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
     const [testMessage, setTestMessage] = useState('');
     const [isLoading, setIsLoading] = useState(true);
+    const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isFirstLoad = useRef(true);
 
     useEffect(() => {
         // 서버(Redis)에서 설정 불러오기
@@ -41,7 +43,30 @@ export default function SlackSettings() {
                 if (data.settings) setSettings({ ...DEFAULT_SETTINGS, ...data.settings });
             })
             .catch(() => {})
-            .finally(() => setIsLoading(false));
+            .finally(() => {
+                setIsLoading(false);
+                isFirstLoad.current = false;
+            });
+    }, []);
+
+    // 토글 변경 시 1초 후 자동저장
+    const autoSaveSettings = useCallback((newSettings: SlackSettingsData) => {
+        if (isFirstLoad.current) return;
+        if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+        autoSaveTimer.current = setTimeout(async () => {
+            setIsSaving(true);
+            try {
+                await fetch('/api/slack-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ settings: newSettings }),
+                });
+                setIsSaved(true);
+                setTimeout(() => setIsSaved(false), 2000);
+            } catch { /* ignore */ } finally {
+                setIsSaving(false);
+            }
+        }, 800);
     }, []);
 
     const handleSave = async () => {
@@ -112,7 +137,11 @@ export default function SlackSettings() {
     };
 
     const toggle = (key: keyof SlackSettingsData) => {
-        setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+        setSettings(prev => {
+            const next = { ...prev, [key]: !prev[key] };
+            autoSaveSettings(next);
+            return next;
+        });
     };
 
     const Toggle = ({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) => (
