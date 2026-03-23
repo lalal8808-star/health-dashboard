@@ -483,11 +483,12 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
                 const pPct = Math.round(pCal / totalMacroCal * 100);
                 const cPct = Math.round(cCal / totalMacroCal * 100);
                 const fPct = Math.round(fCal / totalMacroCal * 100);
-                // 💪 하체 엔진(러킹/HIIT) 최적 비율: 단백질 40%, 탄수화물 30%, 지방 30%
-                // 기준점: 사용자의 최신 기초대사량 (BMR) 직접 사용 (활동 대사량 제외)
-                const dietTargetCal = bmrInfo.bmr || 1500;
-                const targetProtein = Math.round(dietTargetCal * 0.40 / 4);
-                const targetCarbs = Math.round(dietTargetCal * 0.30 / 4);
+                // 다이어트 비율: 단백질 30%, 탄수화물 40%, 지방 30%
+                // 기준: TDEE(BMR × 1.55) - 500kcal (다이어트 적자)
+                const bmr = bmrInfo.bmr || 1500;
+                const dietTargetCal = Math.round(bmr * 1.55 - 500);
+                const targetProtein = Math.round(dietTargetCal * 0.30 / 4);
+                const targetCarbs = Math.round(dietTargetCal * 0.40 / 4);
                 const targetFat = Math.round(dietTargetCal * 0.30 / 9);
                 const deficits = [
                     totals.protein < targetProtein * 0.8 ? `🥩 단백질이 ${targetProtein - totals.protein}g 부족합니다 (목표: ${targetProtein}g)` : null,
@@ -495,8 +496,8 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
                     totals.fat > targetFat * 1.3 ? `🥑 지방 섭취가 ${totals.fat - targetFat}g 초과되었습니다 (목표: ${targetFat}g 이하)` : null,
                 ].filter(Boolean) as string[];
                 const pieData = [
-                    { name: '단백질', value: pPct, target: 40, color: '#10b981', gram: totals.protein, targetGram: targetProtein },
-                    { name: '탄수화물', value: cPct, target: 30, color: '#3b82f6', gram: totals.carbs, targetGram: targetCarbs },
+                    { name: '단백질', value: pPct, target: 30, color: '#10b981', gram: totals.protein, targetGram: targetProtein },
+                    { name: '탄수화물', value: cPct, target: 40, color: '#3b82f6', gram: totals.carbs, targetGram: targetCarbs },
                     { name: '지방', value: fPct, target: 30, color: '#f59e0b', gram: totals.fat, targetGram: targetFat },
                 ];
                 return (
@@ -504,7 +505,7 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
                         <div style={{ marginBottom: '12px' }}>
                             <div style={{ fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                                 🥗 영양소 밸런스
-                                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 400 }}>💪 하체 엔진 맞춤형: 단40:탄30:지30</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 400 }}>🏋️ 다이어트 비율: 단30:탄40:지30 (TDEE-500kcal 기준)</span>
                             </div>
                             <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
                                 🥩 단백질 120~140g · 🍎 탄수화물 100~130g · 🥑 지방 40~60g
