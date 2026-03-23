@@ -143,6 +143,38 @@ export default function Home() {
       setProgress(100);
       setProgressMessage('분석이 완료되었습니다!');
 
+      // Slack 인바디 알림 (설정된 경우)
+      fetch('/api/slack-settings')
+        .then(r => r.json())
+        .then(async (cfg) => {
+          if (!cfg?.webhookUrl || !cfg?.settings?.inbodyAlert) return;
+          await fetch('/api/slack-notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              webhookUrl: cfg.webhookUrl,
+              message: {
+                text: `💪 새 인바디 결과 - ${newRecord.metrics.date || newRecord.createdAt.slice(0,10)}`,
+                blocks: [
+                  { type: 'header', text: { type: 'plain_text', text: `💪 인바디 결과 - ${newRecord.metrics.date || newRecord.createdAt.slice(0,10)}` } },
+                  { type: 'divider' },
+                  {
+                    type: 'section',
+                    fields: [
+                      newRecord.metrics.weight != null && { type: 'mrkdwn', text: `*⚖️ 체중*\n${newRecord.metrics.weight}kg` },
+                      newRecord.metrics.skeletalMuscle != null && { type: 'mrkdwn', text: `*💪 골격근량*\n${newRecord.metrics.skeletalMuscle}kg` },
+                      newRecord.metrics.bodyFatPercent != null && { type: 'mrkdwn', text: `*🔥 체지방률*\n${newRecord.metrics.bodyFatPercent}%` },
+                      newRecord.metrics.bodyFatMass != null && { type: 'mrkdwn', text: `*🏋️ 체지방량*\n${newRecord.metrics.bodyFatMass}kg` },
+                      newRecord.metrics.bmi != null && { type: 'mrkdwn', text: `*📊 BMI*\n${newRecord.metrics.bmi}` },
+                    ].filter(Boolean),
+                  },
+                ],
+              },
+            }),
+          });
+        })
+        .catch(() => {});
+
       setTimeout(() => {
         refreshData();
         setIsAnalyzing(false);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Trash2, Bot, User, Loader2, Mic, MicOff, StopCircle } from 'lucide-react';
+import { Send, Trash2, Bot, User, Loader2, Mic, MicOff, StopCircle, Share2, Check } from 'lucide-react';
 import { ChatMessage } from '@/app/lib/types';
 import { getChatMessages, saveChatMessage, clearChatMessages } from '@/app/lib/chat-storage';
 import { getRecords } from '@/app/lib/storage';
@@ -286,6 +286,54 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
         }
     };
 
+    const [sharingMsgId, setSharingMsgId] = useState<string | null>(null);
+    const [sharedMsgId, setSharedMsgId] = useState<string | null>(null);
+
+    const handleShareToSlack = async (assistantMsg: ChatMessage) => {
+        setSharingMsgId(assistantMsg.id);
+        try {
+            // webhook URL 서버에서 조회
+            const settingsRes = await fetch('/api/slack-settings');
+            const settingsData = await settingsRes.json();
+            const webhookUrl = settingsData?.webhookUrl;
+            if (!webhookUrl) {
+                alert('Slack Webhook URL을 먼저 설정해주세요.\n설정 → 알림 설정에서 입력할 수 있습니다.');
+                return;
+            }
+            if (!settingsData?.settings?.chatShare) {
+                alert('코치 답변 공유가 비활성화되어 있습니다.\n설정 → 알림 설정에서 활성화해주세요.');
+                return;
+            }
+            // 이전 유저 질문 찾기
+            const idx = _messages.findIndex(m => m.id === assistantMsg.id);
+            const prevUser = idx > 0 ? _messages.slice(0, idx).reverse().find(m => m.role === 'user') : null;
+            const question = prevUser?.content ?? '(질문 없음)';
+
+            await fetch('/api/slack-notify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    webhookUrl,
+                    message: {
+                        text: '🤖 코치 조언 공유',
+                        blocks: [
+                            { type: 'header', text: { type: 'plain_text', text: '🤖 코치 조언' } },
+                            { type: 'section', text: { type: 'mrkdwn', text: `*Q: ${question}*` } },
+                            { type: 'section', text: { type: 'mrkdwn', text: assistantMsg.content.length > 800 ? assistantMsg.content.slice(0, 800) + '...' : assistantMsg.content } },
+                            { type: 'context', elements: [{ type: 'mrkdwn', text: `_HealthLens AI 코치 • ${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}_` }] },
+                        ],
+                    },
+                }),
+            });
+            setSharedMsgId(assistantMsg.id);
+            setTimeout(() => setSharedMsgId(null), 3000);
+        } catch {
+            alert('Slack 전송 중 오류가 발생했습니다.');
+        } finally {
+            setSharingMsgId(null);
+        }
+    };
+
     const formatContent = (content: string) => {
         return content.split('\n').map((line, i) => {
             if (line.startsWith('### ')) {
@@ -391,8 +439,32 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
                             ) : (
                                 <div className="chat-message-content" style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
                             )}
-                            <div className="chat-message-time">
-                                {new Date(msg.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
+                                <div className="chat-message-time">
+                                    {new Date(msg.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                                {msg.role === 'assistant' && msg.content && !_isStreaming && (
+                                    <button
+                                        onClick={() => handleShareToSlack(msg)}
+                                        disabled={sharingMsgId === msg.id}
+                                        title="Slack에 공유"
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: '4px',
+                                            padding: '3px 8px', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                                            background: sharedMsgId === msg.id ? 'var(--accent-green-dim)' : 'var(--bg-tertiary)',
+                                            color: sharedMsgId === msg.id ? 'var(--accent-green)' : 'var(--text-tertiary)',
+                                            fontSize: '11px', fontWeight: 500, transition: 'all 0.2s',
+                                            opacity: sharingMsgId === msg.id ? 0.5 : 1,
+                                        }}
+                                    >
+                                        {sharingMsgId === msg.id
+                                            ? <Loader2 size={11} className="animate-spin" />
+                                            : sharedMsgId === msg.id
+                                                ? <><Check size={11} /> 공유됨</>
+                                                : <><Share2 size={11} /> Slack</>
+                                        }
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -21,5 +21,19 @@
         }
       ]
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/daily-report",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/meal-reminder",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-report",
+      "schedule": "0 12 * * 0"
+    }
   ]
 }
