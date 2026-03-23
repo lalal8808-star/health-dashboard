@@ -29,6 +29,10 @@ interface ChatRequestBody {
         foodLogs: any[];
         workoutLogs: any[];
     };
+    image?: {
+        base64: string;
+        mimeType: string;
+    };
 }
 
 function findMissingFoodDays(foodLogs: any[], days = 7): string[] {
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body: ChatRequestBody = await request.json();
-        const { message, history, healthData } = body;
+        const { message, history, healthData, image } = body;
 
         if (!message?.trim()) {
             return new Response('메시지를 입력해주세요.', { status: 400 });
@@ -146,7 +150,16 @@ export async function POST(request: NextRequest) {
                 parts: [{ text: msg.content }],
             });
         }
-        contents.push({ role: 'user', parts: [{ text: message }] });
+        const userParts: any[] = [{ text: message }];
+        if (image?.base64) {
+            userParts.push({
+                inlineData: {
+                    mimeType: image.mimeType,
+                    data: image.base64,
+                },
+            });
+        }
+        contents.push({ role: 'user', parts: userParts });
 
         const result = await model.generateContentStream({ contents });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Trash2, Bot, User, Loader2, Mic, MicOff, StopCircle, Share2, Check } from 'lucide-react';
+import { Send, Trash2, Bot, User, Loader2, Mic, MicOff, StopCircle, Share2, Check, ImagePlus, X } from 'lucide-react';
 import { ChatMessage } from '@/app/lib/types';
 import { getChatMessages, saveChatMessage, clearChatMessages } from '@/app/lib/chat-storage';
 import { getRecords } from '@/app/lib/storage';
@@ -62,9 +62,11 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
     const [input, setInput] = useState('');
     const [isListening, setIsListening] = useState(false);
     const [micAvailable, setMicAvailable] = useState(false);
+    const [pendingImage, setPendingImage] = useState<{ base64: string; mimeType: string; preview: string } | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Force re-render when module state changes
     useEffect(() => {
@@ -113,9 +115,31 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
         workoutLogs: getWorkoutLogs(),
     }), []);
 
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            alert('이미지 파일만 업로드할 수 있습니다.');
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            alert('10MB 이하 이미지만 업로드할 수 있습니다.');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(',')[1];
+            setPendingImage({ base64, mimeType: file.type, preview: dataUrl });
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
+
     const handleSend = async (textOverride?: string) => {
         const text = (textOverride ?? input).trim();
-        if (!text || _isStreaming) return;
+        if ((!text && !pendingImage) || _isStreaming) return;
+        const imageToSend = pendingImage;
 
         // Snapshot history before adding new messages
         const historyForAPI = _messages.map(m => ({ role: m.role, content: m.content }));
@@ -123,10 +147,11 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
         const userMsg: ChatMessage = {
             id: `chat-${Date.now()}-user`,
             role: 'user',
-            content: text,
+            content: imageToSend ? `${text || '이 사진을 분석해줘'}\n[📷 이미지 첨부]` : text,
             createdAt: new Date().toISOString(),
         };
         saveChatMessage(userMsg);
+        setPendingImage(null);
 
         const assistantMsgId = `chat-${Date.now() + 1}-assistant`;
         const assistantPlaceholder: ChatMessage = {
@@ -150,7 +175,12 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
             const res = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text, history: historyForAPI, healthData }),
+                body: JSON.stringify({
+                    message: text || '이 사진을 분석해줘',
+                    history: historyForAPI,
+                    healthData,
+                    ...(imageToSend && { image: { base64: imageToSend.base64, mimeType: imageToSend.mimeType } }),
+                }),
                 signal: _abortController.signal,
             });
 
@@ -489,7 +519,42 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
                         듣고 있습니다... 말씀하세요
                     </div>
                 )}
+                {pendingImage && (
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px',
+                        background: 'var(--bg-tertiary)', borderRadius: '10px 10px 0 0',
+                        borderBottom: '1px solid var(--border-glass)',
+                    }}>
+                        <img src={pendingImage.preview} alt="첨부 이미지" style={{
+                            width: 48, height: 48, borderRadius: 8, objectFit: 'cover',
+                        }} />
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', flex: 1 }}>이미지 첨부됨</span>
+                        <button onClick={() => setPendingImage(null)} style={{
+                            background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)',
+                            padding: 4, borderRadius: 4,
+                        }}>
+                            <X size={16} />
+                        </button>
+                    </div>
+                )}
                 <div className="chat-input-wrapper">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        style={{ display: 'none' }}
+                    />
+                    {!isStreaming && (
+                        <button
+                            className="chat-mic-btn"
+                            onClick={() => fileInputRef.current?.click()}
+                            title="사진 첨부"
+                            type="button"
+                        >
+                            <ImagePlus size={18} />
+                        </button>
+                    )}
                     {micAvailable && !isStreaming && (
                         <button
                             className={`chat-mic-btn ${isListening ? 'listening' : ''}`}
@@ -522,9 +587,9 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
                         </button>
                     ) : (
                         <button
-                            className={`chat-send-btn ${input.trim() ? 'active' : ''}`}
+                            className={`chat-send-btn ${(input.trim() || pendingImage) ? 'active' : ''}`}
                             onClick={() => handleSend()}
-                            disabled={!input.trim()}
+                            disabled={!input.trim() && !pendingImage}
                             type="button"
                         >
                             <Send size={18} />
