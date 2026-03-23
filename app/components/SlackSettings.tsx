@@ -1,27 +1,20 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, Send, Check, AlertCircle, Loader2, Link2, RefreshCw } from 'lucide-react';
-import { getLatestRecord } from '@/app/lib/storage';
 
 interface SlackSettingsData {
     weeklyReport: boolean;
     dailyReport: boolean;
     mealReminder: boolean;
-    goalAlert: boolean;
-    inbodyAlert: boolean;
     chatShare: boolean;
-    targetCalories: number;
 }
 
 const DEFAULT_SETTINGS: SlackSettingsData = {
     weeklyReport: true,
     dailyReport: false,
     mealReminder: false,
-    goalAlert: true,
-    inbodyAlert: true,
     chatShare: true,
-    targetCalories: 2200,
 };
 
 export default function SlackSettings() {
@@ -35,26 +28,13 @@ export default function SlackSettings() {
     const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isFirstLoad = useRef(true);
 
-    // 인바디 데이터로 BMR 자동 계산
-    const bmrInfo = useMemo(() => {
-        const latest = getLatestRecord();
-        if (latest?.metrics.basalMetabolicRate) {
-            const bmr = latest.metrics.basalMetabolicRate;
-            return { bmr, targetCalories: Math.round(bmr * 1.55), date: latest.metrics.date };
-        }
-        return { bmr: null, targetCalories: 2200, date: null };
-    }, []);
-
     useEffect(() => {
-        // 서버(Redis)에서 설정 불러오기
         fetch('/api/slack-settings')
             .then(r => r.json())
             .then(data => {
                 if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
                 const saved = data.settings || {};
-                // targetCalories가 저장된 적 없으면 BMR 자동 계산값 사용
-                const targetCalories = saved.targetCalories ?? bmrInfo.targetCalories;
-                setSettings({ ...DEFAULT_SETTINGS, ...saved, targetCalories });
+                setSettings({ ...DEFAULT_SETTINGS, ...saved });
             })
             .catch(() => {})
             .finally(() => {
@@ -269,39 +249,9 @@ export default function SlackSettings() {
                     <NotifRow icon="🍽️" title="저녁 식단 리마인더" settingKey="mealReminder"
                         desc="매일 20:00 KST — 저녁 미기록 시 알림 전송" />
                     <div style={{ height: 1, background: 'var(--border-glass)' }} />
-                    <NotifRow icon="🎯" title="칼로리 목표 달성 알림" settingKey="goalAlert"
-                        desc="오늘 칼로리 목표를 달성했을 때 즉시 전송" />
-                    <div style={{ height: 1, background: 'var(--border-glass)' }} />
-                    <NotifRow icon="💪" title="인바디 결과 알림" settingKey="inbodyAlert"
-                        desc="새 인바디 데이터 업로드 시 결과 즉시 전송" />
-                    <div style={{ height: 1, background: 'var(--border-glass)' }} />
                     <NotifRow icon="🤖" title="코치 답변 공유 버튼" settingKey="chatShare"
                         desc="챗봇 AI 답변에 Slack 공유 버튼 표시" />
                 </div>
-            </div>
-
-            {/* 칼로리 목표 */}
-            <div className="chart-card">
-                <div className="chart-title" style={{ marginBottom: '12px' }}>⚙️ 리포트 기준 설정</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <label style={{ fontSize: '13px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>일일 칼로리 목표</label>
-                    <input
-                        type="number"
-                        value={settings.targetCalories}
-                        onChange={e => setSettings(prev => ({ ...prev, targetCalories: Number(e.target.value) }))}
-                        style={{
-                            width: '100px', padding: '8px 12px', borderRadius: '8px',
-                            border: '1px solid var(--border-glass)', background: 'var(--bg-tertiary)',
-                            color: 'var(--text-primary)', fontSize: '14px', outline: 'none',
-                        }}
-                    />
-                    <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>kcal</span>
-                </div>
-                <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '8px' }}>
-                    {bmrInfo.bmr
-                        ? `✅ BMR ${bmrInfo.bmr}kcal × 1.55 = ${bmrInfo.targetCalories}kcal 자동 계산됨 (${bmrInfo.date} 기준)`
-                        : '인바디 데이터가 없어 기본값 2200kcal 사용 중'}
-                </p>
             </div>
 
             {/* Tip */}
