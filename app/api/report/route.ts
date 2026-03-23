@@ -19,24 +19,24 @@ ${summary.body ? `- 체중 변화: ${summary.body.weightDelta}kg
 
 ## 식단 (일평균)
 ${summary.food ? `- 평균 칼로리: ${summary.food.avgCalories}kcal
-- 평균 단백질: ${summary.food.avgProtein}g
-- 평균 탄수화물: ${summary.food.avgCarbs}g
-- 평균 지방: ${summary.food.avgFat}g` : '데이터 없음'}
+- 평균 단백질: ${summary.food.avgProtein}g` : '데이터 없음'}
 
 ## 운동
 ${summary.workout ? `- 운동 일수: ${summary.workout.workoutDays}일
 - 총 운동 수: ${summary.workout.totalExercises}개` : '데이터 없음'}
 
-위 데이터를 기반으로 다음 형식으로 한국어 피드백을 작성하세요:
+위 데이터를 분석하여 아래 JSON 형식으로만 응답하세요 (마크다운 코드블록 없이):
 
-## ✅ 잘한 점
-(구체적인 칭찬 2-3개)
-
-## ⚠️ 개선할 점
-(구체적인 개선 방안 2-3개)
-
-## 💡 다음 주 목표 제안
-(실천 가능한 구체적 목표 2개)`;
+{
+  "executiveSummary": "전체 건강 상태 요약 2-3문장",
+  "bodyCompositionAnalysis": "체성분 변화 분석 2-3문장",
+  "trendAnalysis": "현재 추이 및 향후 전망 2문장",
+  "riskAssessment": "주의해야 할 사항 또는 위험 요인 2문장",
+  "recommendations": ["실천 권고사항 1", "실천 권고사항 2", "실천 권고사항 3"],
+  "nutritionGuidance": "식단 가이드 2문장",
+  "exerciseGuidance": "운동 가이드 2문장",
+  "goals": ["단기 목표(1개월)", "중기 목표(3개월)", "장기 목표(6개월)"]
+}`;
 
         const res = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
@@ -54,14 +54,33 @@ ${summary.workout ? `- 운동 일수: ${summary.workout.workoutDays}일
         }
 
         const data = await res.json();
-        const feedback = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        if (!feedback) {
-            console.error('No feedback in response:', JSON.stringify(data));
+        if (!rawText) {
+            console.error('No response text:', JSON.stringify(data));
             return NextResponse.json({ error: 'AI 응답에 내용이 없습니다. 잠시 후 다시 시도해주세요.' }, { status: 500 });
         }
 
-        return NextResponse.json({ feedback });
+        // Parse JSON response
+        let reportData;
+        try {
+            const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            reportData = JSON.parse(cleaned);
+        } catch {
+            // Fallback: wrap plain text into structure
+            reportData = {
+                executiveSummary: rawText.slice(0, 200),
+                bodyCompositionAnalysis: '분석 데이터를 확인하세요.',
+                trendAnalysis: '데이터 추이를 확인하세요.',
+                riskAssessment: '전문의와 상담하세요.',
+                recommendations: [rawText.slice(0, 100)],
+                nutritionGuidance: '균형 잡힌 식단을 유지하세요.',
+                exerciseGuidance: '규칙적인 운동을 권장합니다.',
+                goals: ['체중 유지', '근육량 증가', '체지방 감소'],
+            };
+        }
+
+        return NextResponse.json(reportData);
     } catch (error) {
         console.error('Report AI error:', error);
         return NextResponse.json({ error: `서버 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}` }, { status: 500 });
