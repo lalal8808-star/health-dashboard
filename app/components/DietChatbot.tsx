@@ -309,11 +309,14 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
             const prevUser = idx > 0 ? _messages.slice(0, idx).reverse().find(m => m.role === 'user') : null;
             const question = prevUser?.content ?? '(질문 없음)';
 
-            await fetch('/api/slack-notify', {
+            // 따옴표 포함된 URL 정리 (이전 Redis 버그로 저장된 경우 대비)
+            const cleanUrl = webhookUrl.replace(/^"|"$/g, '').trim();
+
+            const notifyRes = await fetch('/api/slack-notify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    webhookUrl,
+                    webhookUrl: cleanUrl,
                     message: {
                         text: '🤖 코치 조언 공유',
                         blocks: [
@@ -325,6 +328,11 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
                     },
                 }),
             });
+            if (!notifyRes.ok) {
+                const errData = await notifyRes.json().catch(() => ({}));
+                alert(`Slack 전송 실패: ${errData.error || notifyRes.status}\nWebhook URL을 다시 확인해주세요.`);
+                return;
+            }
             setSharedMsgId(assistantMsg.id);
             setTimeout(() => setSharedMsgId(null), 3000);
         } catch {
