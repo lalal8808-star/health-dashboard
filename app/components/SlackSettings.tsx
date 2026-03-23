@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Bell, Send, Check, AlertCircle, Loader2, Link2, RefreshCw } from 'lucide-react';
+import { getLatestRecord } from '@/app/lib/storage';
 
 interface SlackSettingsData {
     weeklyReport: boolean;
@@ -34,13 +35,26 @@ export default function SlackSettings() {
     const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isFirstLoad = useRef(true);
 
+    // 인바디 데이터로 BMR 자동 계산
+    const bmrInfo = useMemo(() => {
+        const latest = getLatestRecord();
+        if (latest?.metrics.basalMetabolicRate) {
+            const bmr = latest.metrics.basalMetabolicRate;
+            return { bmr, targetCalories: Math.round(bmr * 1.55), date: latest.metrics.date };
+        }
+        return { bmr: null, targetCalories: 2200, date: null };
+    }, []);
+
     useEffect(() => {
         // 서버(Redis)에서 설정 불러오기
         fetch('/api/slack-settings')
             .then(r => r.json())
             .then(data => {
                 if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
-                if (data.settings) setSettings({ ...DEFAULT_SETTINGS, ...data.settings });
+                const saved = data.settings || {};
+                // targetCalories가 저장된 적 없으면 BMR 자동 계산값 사용
+                const targetCalories = saved.targetCalories ?? bmrInfo.targetCalories;
+                setSettings({ ...DEFAULT_SETTINGS, ...saved, targetCalories });
             })
             .catch(() => {})
             .finally(() => {
@@ -284,7 +298,9 @@ export default function SlackSettings() {
                     <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>kcal</span>
                 </div>
                 <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '8px' }}>
-                    인바디 데이터가 있으면 BMR 기반으로 자동 계산됩니다.
+                    {bmrInfo.bmr
+                        ? `✅ BMR ${bmrInfo.bmr}kcal × 1.55 = ${bmrInfo.targetCalories}kcal 자동 계산됨 (${bmrInfo.date} 기준)`
+                        : '인바디 데이터가 없어 기본값 2200kcal 사용 중'}
                 </p>
             </div>
 
