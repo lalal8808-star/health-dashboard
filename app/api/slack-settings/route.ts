@@ -10,22 +10,29 @@ const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const WEBHOOK_KEY = 'health-dashboard-slack-webhook';
 const SETTINGS_KEY = 'health-dashboard-slack-settings';
 
+const headers = () => ({
+    Authorization: `Bearer ${REDIS_TOKEN}`,
+    'Content-Type': 'application/json',
+});
+
 async function redisGet(key: string): Promise<string | null> {
     if (!REDIS_URL || !REDIS_TOKEN) return null;
-    const res = await fetch(`${REDIS_URL}/get/${key}`, {
-        headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
+    const res = await fetch(`${REDIS_URL}/pipeline`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify([['GET', key]]),
         cache: 'no-store',
     });
-    const data = await res.json();
-    return data.result ?? null;
+    const data = await res.json() as Array<{ result?: string | null }>;
+    return data[0]?.result ?? null;
 }
 
 async function redisSet(key: string, value: string): Promise<void> {
     if (!REDIS_URL || !REDIS_TOKEN) return;
-    await fetch(`${REDIS_URL}/set/${key}`, {
+    await fetch(`${REDIS_URL}/pipeline`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${REDIS_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(value),
+        headers: headers(),
+        body: JSON.stringify([['SET', key, value]]),
     });
 }
 
