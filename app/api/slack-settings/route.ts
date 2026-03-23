@@ -42,7 +42,7 @@ export async function GET() {
             redisGet(WEBHOOK_KEY),
             redisGet(SETTINGS_KEY),
         ]);
-        const settings = settingsStr ? JSON.parse(settingsStr) : {
+        const DEFAULT_SETTINGS = {
             weeklyReport: true,
             dailyReport: false,
             mealReminder: false,
@@ -50,6 +50,9 @@ export async function GET() {
             inbodyAlert: true,
             chatShare: true,
         };
+        // 저장된 설정이 구버전이더라도 누락된 키는 기본값으로 채움
+        const saved = settingsStr ? JSON.parse(settingsStr) : {};
+        const settings = { ...DEFAULT_SETTINGS, ...saved };
         return NextResponse.json({ webhookUrl: webhookUrl || '', settings });
     } catch (e) {
         return NextResponse.json({ error: String(e) }, { status: 500 });
