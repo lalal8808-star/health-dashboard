@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Send, Check, AlertCircle, Loader2, Link2, RefreshCw } from 'lucide-react';
+import { Bell, Send, Check, AlertCircle, Loader2, Link2, RefreshCw, Play } from 'lucide-react';
 
 interface SlackSettingsData {
     weeklyReport: boolean;
@@ -25,6 +25,8 @@ export default function SlackSettings() {
     const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
     const [testMessage, setTestMessage] = useState('');
     const [isLoading, setIsLoading] = useState(true);
+    const [isSendingDaily, setIsSendingDaily] = useState(false);
+    const [dailySendResult, setDailySendResult] = useState<string | null>(null);
     const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isFirstLoad = useRef(true);
 
@@ -128,6 +130,27 @@ export default function SlackSettings() {
             setTestMessage('네트워크 오류가 발생했습니다.');
         }
         setTimeout(() => { setTestStatus('idle'); setTestMessage(''); }, 4000);
+    };
+
+    const handleSendDailyNow = async () => {
+        setIsSendingDaily(true);
+        setDailySendResult(null);
+        try {
+            const res = await fetch('/api/cron/daily-report');
+            const data = await res.json();
+            if (data.success) {
+                setDailySendResult('✅ 일일 리포트 전송 완료!');
+            } else if (data.skipped) {
+                setDailySendResult(`⚠️ 전송 건너뜀: ${data.skipped === 'no webhook' ? 'Webhook URL 없음' : '비활성화 상태'}`);
+            } else {
+                setDailySendResult(`❌ 오류: ${data.error || '알 수 없는 오류'}`);
+            }
+        } catch {
+            setDailySendResult('❌ 네트워크 오류');
+        } finally {
+            setIsSendingDaily(false);
+            setTimeout(() => setDailySendResult(null), 5000);
+        }
     };
 
     const toggle = (key: keyof SlackSettingsData) => {
@@ -243,8 +266,31 @@ export default function SlackSettings() {
                     <NotifRow icon="📊" title="주간 리포트" settingKey="weeklyReport"
                         desc="매주 일요일 21:00 KST — 한 주 식단·운동 요약 전송" />
                     <div style={{ height: 1, background: 'var(--border-glass)' }} />
-                    <NotifRow icon="📋" title="일일 리포트" settingKey="dailyReport"
-                        desc="매일 21:00 KST — 당일 식단·운동 요약 전송" />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>📋 일일 리포트</div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>매일 21:00 KST — 당일 식단·운동 요약 전송</div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <button onClick={handleSendDailyNow} disabled={isSendingDaily}
+                                title="지금 바로 전송"
+                                style={{
+                                    padding: '5px 10px', borderRadius: '8px', border: '1px solid var(--border-glass)',
+                                    background: 'var(--bg-tertiary)', cursor: 'pointer', color: 'var(--text-secondary)',
+                                    fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4,
+                                    opacity: isSendingDaily ? 0.5 : 1,
+                                }}>
+                                {isSendingDaily ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />}
+                                지금 전송
+                            </button>
+                            <Toggle enabled={!!settings.dailyReport} onToggle={() => toggle('dailyReport')} />
+                        </div>
+                    </div>
+                    {dailySendResult && (
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', padding: '6px 10px', background: 'var(--bg-tertiary)', borderRadius: '8px' }}>
+                            {dailySendResult}
+                        </div>
+                    )}
                     <div style={{ height: 1, background: 'var(--border-glass)' }} />
                     <NotifRow icon="🍽️" title="저녁 식단 리마인더" settingKey="mealReminder"
                         desc="매일 20:00 KST — 저녁 미기록 시 알림 전송" />
