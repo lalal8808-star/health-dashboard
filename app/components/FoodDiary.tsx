@@ -21,6 +21,14 @@ interface FoodDiaryProps {
 }
 
 type MealKey = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+type ActivityMode = 'diet' | 'office' | 'worker' | 'workout';
+
+const ACTIVITY_MODES: { key: ActivityMode; label: string; emoji: string; multiplier: number; macros: { p: number; c: number; f: number } }[] = [
+    { key: 'diet',    label: '다이어트', emoji: '🥗', multiplier: 1.0,   macros: { p: 35, c: 40, f: 25 } },
+    { key: 'office',  label: '사무직',   emoji: '💼', multiplier: 1.2,   macros: { p: 20, c: 55, f: 25 } },
+    { key: 'worker',  label: '직장인',   emoji: '🚶', multiplier: 1.375, macros: { p: 25, c: 50, f: 25 } },
+    { key: 'workout', label: '운동',     emoji: '🏋️', multiplier: 1.55,  macros: { p: 30, c: 45, f: 25 } },
+];
 
 const MEAL_CONFIG: Record<MealKey, { emoji: string; label: string; color: string }> = {
     breakfast: { emoji: '🌅', label: '아침', color: '#f59e0b' },
@@ -69,14 +77,25 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isProcessingRef = useRef(false);
 
+    const [activityMode, setActivityMode] = useState<ActivityMode>(() => {
+        if (typeof window === 'undefined') return 'workout';
+        return (localStorage.getItem('health-dashboard-activity-mode') as ActivityMode) || 'workout';
+    });
+
+    const handleModeChange = (mode: ActivityMode) => {
+        setActivityMode(mode);
+        localStorage.setItem('health-dashboard-activity-mode', mode);
+    };
+
     const bmrInfo = useMemo(() => {
         const latest = getLatestRecord();
         if (latest?.metrics.basalMetabolicRate) {
             const bmr = latest.metrics.basalMetabolicRate;
-            return { bmr, targetCalories: Math.round(bmr * 1.55), date: latest.metrics.date };
+            const mode = ACTIVITY_MODES.find(m => m.key === activityMode) || ACTIVITY_MODES[3];
+            return { bmr, targetCalories: Math.round(bmr * mode.multiplier), date: latest.metrics.date };
         }
         return { bmr: null, targetCalories: 2200, date: null };
-    }, []);
+    }, [activityMode]);
 
     const refreshLog = useCallback((date: string) => {
         setFoodLog(getFoodLogByDate(date));
@@ -451,6 +470,20 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
 
             {/* 칼로리 진행 */}
             <div className="chart-card" style={{ marginBottom: '24px' }}>
+                {/* 활동 모드 선택 */}
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                    {ACTIVITY_MODES.map(m => (
+                        <button key={m.key} onClick={() => handleModeChange(m.key)}
+                            style={{
+                                padding: '5px 12px', borderRadius: '20px', border: 'none', cursor: 'pointer',
+                                fontSize: '12px', fontWeight: 600, transition: 'all 0.15s',
+                                background: activityMode === m.key ? 'var(--accent-blue)' : 'var(--bg-tertiary)',
+                                color: activityMode === m.key ? 'white' : 'var(--text-secondary)',
+                            }}>
+                            {m.emoji} {m.label}
+                        </button>
+                    ))}
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '12px' }}>
                     <span style={{ fontSize: '14px', fontWeight: 600 }}>일일 섭취 칼로리</span>
                     <span style={{ fontFamily: 'monospace', fontSize: '20px', fontWeight: 700 }}>
@@ -462,7 +495,9 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
                     <div style={{ height: '100%', width: `${calPercent}%`, background: calPercent > 100 ? 'var(--accent-red)' : 'var(--gradient-blue)', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
                 <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-tertiary)', textAlign: 'right' }}>
-                    {bmrInfo.bmr ? `BMR ${bmrInfo.bmr}kcal × 1.55 = ${targetCal}kcal (${bmrInfo.date} 기준)` : '기본 권장 칼로리 (BMR 데이터 없음)'}
+                    {bmrInfo.bmr
+                        ? `BMR ${bmrInfo.bmr}kcal × ${ACTIVITY_MODES.find(m => m.key === activityMode)?.multiplier} = ${targetCal}kcal (${bmrInfo.date} 기준)`
+                        : '기본 권장 칼로리 (BMR 데이터 없음)'}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '16px' }}>
                     {[{ label: '단백질', value: totals.protein, color: '#10b981' }, { label: '탄수화물', value: totals.carbs, color: '#3b82f6' }, { label: '지방', value: totals.fat, color: '#f59e0b' }].map(n => (
@@ -483,29 +518,28 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
                 const pPct = Math.round(pCal / totalMacroCal * 100);
                 const cPct = Math.round(cCal / totalMacroCal * 100);
                 const fPct = Math.round(fCal / totalMacroCal * 100);
-                // 다이어트 비율: 단백질 30%, 탄수화물 40%, 지방 30%
-                // 기준: TDEE(BMR × 1.55) - 500kcal (다이어트 적자)
-                const bmr = bmrInfo.bmr || 1500;
-                const dietTargetCal = Math.round(bmr * 1.55 - 500);
-                const targetProtein = Math.round(dietTargetCal * 0.30 / 4);
-                const targetCarbs = Math.round(dietTargetCal * 0.40 / 4);
-                const targetFat = Math.round(dietTargetCal * 0.30 / 9);
+                const currentMode = ACTIVITY_MODES.find(m => m.key === activityMode) || ACTIVITY_MODES[3];
+                const targetProtein = Math.round(targetCal * (currentMode.macros.p / 100) / 4);
+                const targetCarbs   = Math.round(targetCal * (currentMode.macros.c / 100) / 4);
+                const targetFat     = Math.round(targetCal * (currentMode.macros.f / 100) / 9);
                 const deficits = [
                     totals.protein < targetProtein * 0.8 ? `🥩 단백질이 ${targetProtein - totals.protein}g 부족합니다 (목표: ${targetProtein}g)` : null,
                     totals.carbs < targetCarbs * 0.7 ? `🍎 탄수화물이 ${targetCarbs - totals.carbs}g 부족합니다 (목표: ${targetCarbs}g)` : null,
                     totals.fat > targetFat * 1.3 ? `🥑 지방 섭취가 ${totals.fat - targetFat}g 초과되었습니다 (목표: ${targetFat}g 이하)` : null,
                 ].filter(Boolean) as string[];
                 const pieData = [
-                    { name: '단백질', value: pPct, target: 30, color: '#10b981', gram: totals.protein, targetGram: targetProtein },
-                    { name: '탄수화물', value: cPct, target: 40, color: '#3b82f6', gram: totals.carbs, targetGram: targetCarbs },
-                    { name: '지방', value: fPct, target: 30, color: '#f59e0b', gram: totals.fat, targetGram: targetFat },
+                    { name: '단백질', value: pPct, target: currentMode.macros.p, color: '#10b981', gram: totals.protein, targetGram: targetProtein },
+                    { name: '탄수화물', value: cPct, target: currentMode.macros.c, color: '#3b82f6', gram: totals.carbs, targetGram: targetCarbs },
+                    { name: '지방', value: fPct, target: currentMode.macros.f, color: '#f59e0b', gram: totals.fat, targetGram: targetFat },
                 ];
                 return (
                     <div className="chart-card" style={{ marginBottom: '24px' }}>
                         <div style={{ marginBottom: '12px' }}>
                             <div style={{ fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                                 🥗 영양소 밸런스
-                                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 400 }}>🏋️ 다이어트 비율: 단30:탄40:지30 (TDEE-500kcal 기준)</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 400 }}>
+                                    {currentMode.emoji} {currentMode.label} 비율: 단{currentMode.macros.p}:탄{currentMode.macros.c}:지{currentMode.macros.f}
+                                </span>
                             </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
