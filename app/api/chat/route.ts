@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
 
         // Notion read and context build in parallel
         const [notionHistory, contextMessage] = await Promise.all([
-            readRecentChats(20).catch(() => [] as { question: string; answer: string; date: string }[]),
+            readRecentChats(5).catch(() => [] as { question: string; answer: string; date: string }[]),
             Promise.resolve(buildContextMessage(healthData)),
         ]);
 
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
             parts: [{ text: '데이터 확인 완료. 무엇이든 물어보세요! 💪' }],
         });
 
-        const recentHistory = history.slice(-20);
+        const recentHistory = history.slice(-10);
         for (const msg of recentHistory) {
             contents.push({
                 role: msg.role === 'user' ? 'user' : 'model',
