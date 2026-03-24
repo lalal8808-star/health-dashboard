@@ -538,7 +538,7 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
                             <div style={{ fontSize: '14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                                 🥗 영양소 밸런스
                                 <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 400 }}>
-                                    {currentMode.emoji} {currentMode.label} 비율: 단{currentMode.macros.p}:탄{currentMode.macros.c}:지{currentMode.macros.f}
+                                    {currentMode.emoji} {currentMode.label} 비율: 탄{currentMode.macros.c}:단{currentMode.macros.p}:지{currentMode.macros.f}
                                 </span>
                             </div>
                         </div>
