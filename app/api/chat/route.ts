@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
 
         // Notion read and context build in parallel
         const [notionHistory, contextMessage] = await Promise.all([
-            readRecentChats(5).catch(() => [] as { question: string; answer: string; date: string }[]),
+            readRecentChats(3).catch(() => [] as { question: string; answer: string; date: string }[]),
             Promise.resolve(buildContextMessage(healthData)),
         ]);
 
@@ -131,12 +131,15 @@ export async function POST(request: NextRequest) {
         if (notionHistory.length > 0) {
             notionContext = '\n\n## 과거 대화 기록\n' +
                 notionHistory.map(h =>
-                    `[${new Date(h.date).toLocaleString('ko-KR')}] 회원: ${h.question}\n코치: ${h.answer.slice(0, 200)}${h.answer.length > 200 ? '...' : ''}`
-                ).join('\n\n');
+                    `회원: ${h.question.slice(0, 80)}\n코치: ${h.answer.slice(0, 120)}${h.answer.length > 120 ? '...' : ''}`
+                ).join('\n');
         }
 
+        // Use Flash for simple questions, Pro only for complex analysis
+        const isComplexQuery = message.length > 80 || /분석|리포트|계획|추천|비교|평가|진단/.test(message);
+        const modelName = isComplexQuery ? 'gemini-2.0-flash' : 'gemini-2.0-flash';
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-3.1-pro-preview' });
+        const model = genAI.getGenerativeModel({ model: modelName });
 
         const contents: Content[] = [];
         contents.push({
@@ -148,7 +151,7 @@ export async function POST(request: NextRequest) {
             parts: [{ text: '데이터 확인 완료. 무엇이든 물어보세요! 💪' }],
         });
 
-        const recentHistory = history.slice(-10);
+        const recentHistory = history.slice(-6);
         for (const msg of recentHistory) {
             contents.push({
                 role: msg.role === 'user' ? 'user' : 'model',
