@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Calendar, TrendingUp, TrendingDown, Minus, Loader2, Dumbbell, Utensils, Activity } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { AnalysisRecord } from '@/app/lib/types';
@@ -18,6 +18,14 @@ export default function WeeklyReport() {
     const [period, setPeriod] = useState<Period>('week');
     const [isGeneratingAI, setIsGeneratingAI] = useState(false);
     const [aiFeedback, setAiFeedback] = useState<string | null>(null);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 640);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
 
     const today = useMemo(() => new Date(), []);
 
@@ -227,14 +235,14 @@ export default function WeeklyReport() {
             </div>
 
             {/* Food & Workout Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
                 {/* Nutrition */}
                 <div className="chart-card">
                     <div className="chart-title" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Utensils size={18} color="#10b981" /> {periodLabel} 식단 요약
                     </div>
                     {foodData ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'center' : 'center', gap: '16px' }}>
                             <div style={{ width: 130, height: 130, flexShrink: 0 }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
@@ -245,7 +253,7 @@ export default function WeeklyReport() {
                                     </PieChart>
                                 </ResponsiveContainer>
                             </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ flex: 1, minWidth: 0, width: isMobile ? '100%' : 'auto', textAlign: isMobile ? 'center' : 'left' }}>
                                 <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '6px' }}>일평균 ({foodData.days}일 기록)</div>
                                 <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{foodData.avgCalories}<span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}> kcal</span></div>
                                 <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
