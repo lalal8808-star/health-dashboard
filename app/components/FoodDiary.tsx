@@ -77,14 +77,31 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isProcessingRef = useRef(false);
 
+    const getDateModes = (): Record<string, ActivityMode> => {
+        if (typeof window === 'undefined') return {};
+        try { return JSON.parse(localStorage.getItem('health-dashboard-date-modes') || '{}'); } catch { return {}; }
+    };
+
+    const getModeForDate = (date: string): ActivityMode => {
+        const modes = getDateModes();
+        return (modes[date] as ActivityMode) || 'diet';
+    };
+
     const [activityMode, setActivityMode] = useState<ActivityMode>(() => {
-        if (typeof window === 'undefined') return 'workout';
-        return (localStorage.getItem('health-dashboard-activity-mode') as ActivityMode) || 'workout';
+        if (typeof window === 'undefined') return 'diet';
+        const today = toLocalDateStr(new Date());
+        return getModeForDate(today);
     });
 
     const handleModeChange = (mode: ActivityMode) => {
         setActivityMode(mode);
-        localStorage.setItem('health-dashboard-activity-mode', mode);
+        const modes = getDateModes();
+        modes[selectedDate] = mode;
+        localStorage.setItem('health-dashboard-date-modes', JSON.stringify(modes));
+        // Redis에도 동기화
+        import('@/app/lib/storage-sync').then(({ syncedSetItem }) => {
+            syncedSetItem('health-dashboard-date-modes', modes);
+        });
     };
 
     const bmrInfo = useMemo(() => {
@@ -106,6 +123,7 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
         const today = toLocalDateStr(new Date());
         setSelectedDate(today);
         setFoodLog(getFoodLogByDate(today));
+        setActivityMode(getModeForDate(today));
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 
@@ -126,6 +144,7 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
         const nd = toLocalDateStr(d);
         setSelectedDate(nd);
         refreshLog(nd);
+        setActivityMode(getModeForDate(nd));
     };
 
     // ── 순차 AI 분석 ─────────────────────────────────────────

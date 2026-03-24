@@ -16,6 +16,7 @@ const SYNC_KEYS = [
     'health-dashboard-meal-presets',
     'health-dashboard-food-items',
     'health-dashboard-chat-messages',
+    'health-dashboard-date-modes',
 ] as const;
 
 export type SyncKey = typeof SYNC_KEYS[number];
