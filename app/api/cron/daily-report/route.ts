@@ -26,7 +26,8 @@ export async function GET() {
             redisGet('health-dashboard-slack-settings'),
         ]);
 
-        if (!webhookUrl) return NextResponse.json({ skipped: 'no webhook' });
+        const cleanUrl = webhookUrl ? String(webhookUrl).replace(/^"|"$/g, '').trim() : '';
+        if (!cleanUrl) return NextResponse.json({ skipped: 'no webhook' });
 
         const settings = settingsStr ? JSON.parse(settingsStr) : {};
         if (!settings.dailyReport) return NextResponse.json({ skipped: 'disabled' });
@@ -69,7 +70,8 @@ export async function GET() {
             workoutDuration: workoutEntry?.duration,
         });
 
-        await sendSlackMessage(webhookUrl, message);
+        const sent = await sendSlackMessage(cleanUrl, message);
+        if (!sent) return NextResponse.json({ error: 'Slack 전송 실패 (webhook 응답 오류)' }, { status: 500 });
         return NextResponse.json({ success: true, date: today });
     } catch (e) {
         console.error('Daily report cron error:', e);
