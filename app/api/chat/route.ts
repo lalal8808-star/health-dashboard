@@ -135,11 +135,8 @@ export async function POST(request: NextRequest) {
                 ).join('\n');
         }
 
-        // Use Flash for simple questions, Pro only for complex analysis
-        const isComplexQuery = message.length > 80 || /분석|리포트|계획|추천|비교|평가|진단/.test(message);
-        const modelName = isComplexQuery ? 'gemini-2.0-flash' : 'gemini-2.0-flash';
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: modelName });
+        const model = genAI.getGenerativeModel({ model: 'gemini-3.1-pro-preview' });
 
         const contents: Content[] = [];
         contents.push({
