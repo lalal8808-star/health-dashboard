@@ -24,10 +24,10 @@ type MealKey = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 type ActivityMode = 'diet' | 'office' | 'worker' | 'workout';
 
 const ACTIVITY_MODES: { key: ActivityMode; label: string; emoji: string; multiplier: number; macros: { p: number; c: number; f: number } }[] = [
-    { key: 'diet',    label: '다이어트', emoji: '🥗', multiplier: 1.0,   macros: { p: 35, c: 40, f: 25 } },
-    { key: 'office',  label: '사무직',   emoji: '💼', multiplier: 1.2,   macros: { p: 20, c: 55, f: 25 } },
-    { key: 'worker',  label: '직장인',   emoji: '🚶', multiplier: 1.375, macros: { p: 25, c: 50, f: 25 } },
-    { key: 'workout', label: '운동',     emoji: '🏋️', multiplier: 1.55,  macros: { p: 30, c: 45, f: 25 } },
+    { key: 'diet',    label: '다이어트', emoji: '🥗', multiplier: 1.0,   macros: { p: 40, c: 30, f: 30 } },
+    { key: 'office',  label: '사무직',   emoji: '💼', multiplier: 1.2,   macros: { p: 30, c: 40, f: 30 } },
+    { key: 'worker',  label: '직장인',   emoji: '🚶', multiplier: 1.375, macros: { p: 30, c: 40, f: 30 } },
+    { key: 'workout', label: '운동',     emoji: '🏋️', multiplier: 1.55,  macros: { p: 25, c: 50, f: 25 } },
 ];
 
 const MEAL_CONFIG: Record<MealKey, { emoji: string; label: string; color: string }> = {
