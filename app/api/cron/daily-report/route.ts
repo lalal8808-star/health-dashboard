@@ -79,14 +79,20 @@ export async function GET() {
         const mealTypes = new Set(entries.map(e => e.meal));
         const workoutEntry = todayWorkout?.entries?.[0];
 
-        // 실제 섭취 비율 계산
-        const pCal = protein * 4;
-        const cCal = carbs * 4;
-        const fCal = fat * 9;
-        const totalMacroCal = pCal + cCal + fCal || 1;
-        const pPct = Math.round(pCal / totalMacroCal * 100);
-        const cPct = Math.round(cCal / totalMacroCal * 100);
-        const fPct = Math.round(fCal / totalMacroCal * 100);
+        // 목표 영양소 (g)
+        const targetCarbs = Math.round(targetCalories * mode.macros.c / 100 / 4);
+        const targetProtein = Math.round(targetCalories * mode.macros.p / 100 / 4);
+        const targetFat = Math.round(targetCalories * mode.macros.f / 100 / 9);
+
+        // 목표 대비 섭취 비율 (바 차트용, 100% 캡)
+        const cBarPct = targetCarbs > 0 ? Math.min(Math.round((carbs / targetCarbs) * 100), 100) : 0;
+        const pBarPct = targetProtein > 0 ? Math.min(Math.round((protein / targetProtein) * 100), 100) : 0;
+        const fBarPct = targetFat > 0 ? Math.min(Math.round((fat / targetFat) * 100), 100) : 0;
+
+        // 실제 섭취 비율 (표시용)
+        const cActualPct = targetCarbs > 0 ? Math.round((carbs / targetCarbs) * 100) : 0;
+        const pActualPct = targetProtein > 0 ? Math.round((protein / targetProtein) * 100) : 0;
+        const fActualPct = targetFat > 0 ? Math.round((fat / targetFat) * 100) : 0;
 
         const calorieRate = targetCalories > 0 ? Math.round((totalCalories / targetCalories) * 100) : 0;
         const calorieStatus = calorieRate >= 90 && calorieRate <= 110 ? '✅' : calorieRate > 110 ? '⚠️' : '📉';
@@ -116,9 +122,9 @@ export async function GET() {
                         text: [
                             `*🥗 영양소 밸런스* (목표 탄${mode.macros.c}:단${mode.macros.p}:지${mode.macros.f})`,
                             ``,
-                            `🍚 탄수화물  ${makeBar(cPct)} ${cPct}%  *${carbs}g*  (목표 ${Math.round(targetCalories * mode.macros.c / 100 / 4)}g)`,
-                            `🥩 단백질     ${makeBar(pPct)} ${pPct}%  *${protein}g*  (목표 ${Math.round(targetCalories * mode.macros.p / 100 / 4)}g)`,
-                            `🥑 지방        ${makeBar(fPct)} ${fPct}%  *${fat}g*  (목표 ${Math.round(targetCalories * mode.macros.f / 100 / 9)}g)`,
+                            `🍚 탄수화물  ${makeBar(cBarPct)} ${cActualPct}%  *${carbs}g*  (목표 ${targetCarbs}g)`,
+                            `🥩 단백질     ${makeBar(pBarPct)} ${pActualPct}%  *${protein}g*  (목표 ${targetProtein}g)`,
+                            `🥑 지방        ${makeBar(fBarPct)} ${fActualPct}%  *${fat}g*  (목표 ${targetFat}g)`,
                         ].join('\n'),
                     },
                 },
