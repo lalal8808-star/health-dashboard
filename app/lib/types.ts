@@ -59,6 +59,7 @@ export interface DailyFoodLog {
   date: string;          // YYYY-MM-DD
   entries: FoodEntry[];
   targetCalories: number;
+  updatedAt?: string;    // ISO timestamp — 삭제/추가 시 갱신, merge 충돌 해결용
 }
 
 // Meal Preset (저장된 식단 템플릿)

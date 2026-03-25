@@ -25,8 +25,9 @@ export function saveFoodEntry(date: string, entry: FoodEntry, targetCalories: nu
     const idx = logs.findIndex(l => l.date === date);
     if (idx >= 0) {
         logs[idx].entries.push(entry);
+        logs[idx].updatedAt = new Date().toISOString();
     } else {
-        logs.push({ date, entries: [entry], targetCalories });
+        logs.push({ date, entries: [entry], targetCalories, updatedAt: new Date().toISOString() });
     }
     syncedSetItem(FOOD_STORAGE_KEY, logs);
 }
@@ -38,6 +39,8 @@ export function deleteFoodEntry(date: string, entryId: string): void {
         logs[idx].entries = logs[idx].entries.filter(e => e.id !== entryId);
         if (logs[idx].entries.length === 0) {
             logs.splice(idx, 1);
+        } else {
+            logs[idx].updatedAt = new Date().toISOString();
         }
         // 삭제는 즉시 서버 반영 (디바운스 없음 - sync 경쟁 방지)
         syncedSetItemNow(FOOD_STORAGE_KEY, logs);
