@@ -360,6 +360,9 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
     const handleDelete = (entryId: string) => { deleteFoodEntry(selectedDate, entryId); refreshLog(selectedDate); };
 
     // ── 음성 입력 ─────────────────────────────────────────────
+    const voiceTextRef = useRef('');
+    const voiceHadErrorRef = useRef(false);
+
     const startListening = useCallback(() => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; // eslint-disable-line @typescript-eslint/no-explicit-any
         if (!SpeechRecognition) {
@@ -369,6 +372,8 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
         setVoiceError(null);
         setVoiceResult(null);
         setVoiceText('');
+        voiceTextRef.current = '';
+        voiceHadErrorRef.current = false;
 
         const recognition = new SpeechRecognition();
         recognition.lang = 'ko-KR';
@@ -381,11 +386,29 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
             for (let i = 0; i < event.results.length; i++) {
                 transcript += event.results[i][0].transcript;
             }
+            voiceTextRef.current = transcript; // ref 즉시 업데이트 (onend보다 먼저)
             setVoiceText(transcript);
+        };
+
+        recognition.onerror = (event: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            voiceHadErrorRef.current = true;
+            setIsListening(false);
+            if (event.error === 'no-speech') {
+                setVoiceError('음성이 감지되지 않았습니다. 마이크에 가까이 대고 다시 시도해주세요.');
+            } else if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                setVoiceError('마이크 권한이 필요합니다. 브라우저 주소창 🔒 아이콘 → 마이크 허용 후 다시 시도해주세요.');
+            } else if (event.error === 'aborted') {
+                // 사용자가 직접 중지한 경우 → 에러 표시하지 않음
+            } else {
+                setVoiceError(`음성 인식 오류: ${event.error}`);
+            }
         };
 
         recognition.onend = async () => {
             setIsListening(false);
+            // onerror가 이미 처리한 경우 중복 처리하지 않음
+            if (voiceHadErrorRef.current) return;
+
             const finalText = voiceTextRef.current;
             if (!finalText.trim()) {
                 setVoiceError('음성이 인식되지 않았습니다. 다시 시도해주세요.');
@@ -430,25 +453,10 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
             }
         };
 
-        recognition.onerror = (event: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-            setIsListening(false);
-            if (event.error === 'no-speech') {
-                setVoiceError('음성이 감지되지 않았습니다. 다시 시도해주세요.');
-            } else if (event.error === 'not-allowed') {
-                setVoiceError('마이크 권한이 필요합니다. 브라우저 설정에서 허용해주세요.');
-            } else {
-                setVoiceError(`음성 인식 오류: ${event.error}`);
-            }
-        };
-
         recognitionRef.current = recognition;
         recognition.start();
         setIsListening(true);
     }, [selectedMeal]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // voiceText를 ref로도 추적 (onend 콜백 closure 문제 해결)
-    const voiceTextRef = useRef('');
-    useEffect(() => { voiceTextRef.current = voiceText; }, [voiceText]);
 
     const stopListening = useCallback(() => {
         recognitionRef.current?.stop();
