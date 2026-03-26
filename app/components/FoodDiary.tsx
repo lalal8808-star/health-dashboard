@@ -13,7 +13,9 @@ import {
     Plus, Trash2, ChevronLeft, ChevronRight,
     Loader2, CheckCircle2, XCircle, ImagePlus,
     BookmarkPlus, BookOpen, ChevronDown, ChevronUp,
+    Mic, MicOff,
 } from 'lucide-react';
+import { parseVoiceInput } from '@/app/lib/voice-parser';
 
 interface FoodDiaryProps {
     onGoToUpload: () => void;
@@ -74,8 +76,28 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
     const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
     const [isAISearching, setIsAISearching] = useState(false);
     const [aiSearchError, setAISearchError] = useState<string | null>(null);
+    // 음성 입력
+    const [isListening, setIsListening] = useState(false);
+    const [voiceText, setVoiceText] = useState('');
+    const [voiceProcessing, setVoiceProcessing] = useState(false);
+    const [voiceResult, setVoiceResult] = useState<{
+        meal: MealKey;
+        name: string;
+        description: string;
+        calories: number;
+        protein: number;
+        carbs: number;
+        fat: number;
+        source: 'local' | 'ai';
+    } | null>(null);
+    const [voiceError, setVoiceError] = useState<string | null>(null);
+    const recognitionRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
     const fileInputRef = useRef<HTMLInputElement>(null);
     const isProcessingRef = useRef(false);
+
+    // 브라우저 음성 인식 지원 여부
+    const speechSupported = typeof window !== 'undefined' &&
+        !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition; // eslint-disable-line @typescript-eslint/no-explicit-any
 
     const getDateModes = (): Record<string, ActivityMode> => {
         if (typeof window === 'undefined') return {};
@@ -336,6 +358,146 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
     };
 
     const handleDelete = (entryId: string) => { deleteFoodEntry(selectedDate, entryId); refreshLog(selectedDate); };
+
+    // ── 음성 입력 ─────────────────────────────────────────────
+    const startListening = useCallback(() => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (!SpeechRecognition) {
+            setVoiceError('이 브라우저에서는 음성 인식을 지원하지 않습니다.');
+            return;
+        }
+        setVoiceError(null);
+        setVoiceResult(null);
+        setVoiceText('');
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'ko-KR';
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+
+        recognition.onresult = (event: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            let transcript = '';
+            for (let i = 0; i < event.results.length; i++) {
+                transcript += event.results[i][0].transcript;
+            }
+            setVoiceText(transcript);
+        };
+
+        recognition.onend = async () => {
+            setIsListening(false);
+            const finalText = voiceTextRef.current;
+            if (!finalText.trim()) {
+                setVoiceError('음성이 인식되지 않았습니다. 다시 시도해주세요.');
+                return;
+            }
+
+            const parsed = parseVoiceInput(finalText);
+            if (parsed.meal) setSelectedMeal(parsed.meal);
+            const mealToUse = parsed.meal || selectedMeal;
+
+            if (!parsed.foodQuery) {
+                setVoiceError('음식 이름을 인식하지 못했습니다. 다시 시도해주세요.');
+                return;
+            }
+
+            setVoiceProcessing(true);
+            try {
+                const res = await fetch('/api/voice-food', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: parsed.foodQuery, foodItems: getFoodItems() }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    setVoiceResult({
+                        meal: mealToUse,
+                        name: data.name,
+                        description: data.description || '',
+                        calories: data.calories,
+                        protein: data.protein,
+                        carbs: data.carbs,
+                        fat: data.fat,
+                        source: data.source,
+                    });
+                } else {
+                    setVoiceError(data.error || '영양 정보를 찾을 수 없습니다.');
+                }
+            } catch {
+                setVoiceError('네트워크 오류가 발생했습니다.');
+            } finally {
+                setVoiceProcessing(false);
+            }
+        };
+
+        recognition.onerror = (event: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+            setIsListening(false);
+            if (event.error === 'no-speech') {
+                setVoiceError('음성이 감지되지 않았습니다. 다시 시도해주세요.');
+            } else if (event.error === 'not-allowed') {
+                setVoiceError('마이크 권한이 필요합니다. 브라우저 설정에서 허용해주세요.');
+            } else {
+                setVoiceError(`음성 인식 오류: ${event.error}`);
+            }
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+        setIsListening(true);
+    }, [selectedMeal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // voiceText를 ref로도 추적 (onend 콜백 closure 문제 해결)
+    const voiceTextRef = useRef('');
+    useEffect(() => { voiceTextRef.current = voiceText; }, [voiceText]);
+
+    const stopListening = useCallback(() => {
+        recognitionRef.current?.stop();
+        setIsListening(false);
+    }, []);
+
+    const handleVoiceConfirm = () => {
+        if (!voiceResult) return;
+        const entry: FoodEntry = {
+            id: `food-voice-${Date.now()}`,
+            time: new Date().toTimeString().slice(0, 5),
+            meal: voiceResult.meal,
+            name: voiceResult.name,
+            description: voiceResult.description,
+            calories: voiceResult.calories,
+            protein: voiceResult.protein,
+            carbs: voiceResult.carbs,
+            fat: voiceResult.fat,
+        };
+        saveFoodEntry(selectedDate, entry, bmrInfo.targetCalories);
+
+        // AI로 찾은 음식은 로컬 DB에 저장 (다음에 바로 검색 가능)
+        if (voiceResult.source === 'ai') {
+            saveFoodItem({
+                id: `food-ai-${Date.now()}`,
+                name: voiceResult.name,
+                description: voiceResult.description,
+                calories: voiceResult.calories,
+                protein: voiceResult.protein,
+                carbs: voiceResult.carbs,
+                fat: voiceResult.fat,
+                createdAt: new Date().toISOString(),
+            });
+            setFoodItems(getFoodItems());
+        }
+
+        refreshLog(selectedDate);
+        setVoiceResult(null);
+        setVoiceText('');
+        setVoiceError(null);
+    };
+
+    const handleVoiceCancel = () => {
+        setVoiceResult(null);
+        setVoiceText('');
+        setVoiceError(null);
+        setVoiceProcessing(false);
+        if (isListening) stopListening();
+    };
 
     // ── 식단 저장 ─────────────────────────────────────────────
     const handleSavePreset = (meal: MealKey) => {
@@ -716,14 +878,131 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
                 </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
                 <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing}>
                     사진 선택
                 </button>
                 <button className="btn btn-secondary" onClick={() => setShowManualForm(v => !v)}>
                     <Plus size={16} /> 직접 입력
                 </button>
+                {speechSupported && (
+                    <button
+                        className={`btn ${isListening ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={isListening ? stopListening : startListening}
+                        disabled={voiceProcessing}
+                        style={isListening ? {
+                            animation: 'pulse 1.5s ease-in-out infinite',
+                            background: '#ef4444',
+                            borderColor: '#ef4444',
+                        } : {}}
+                    >
+                        {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+                        {isListening ? '듣는 중…' : '음성 입력'}
+                    </button>
+                )}
             </div>
+
+            {/* 음성 입력 패널 */}
+            {(isListening || voiceText || voiceProcessing || voiceResult || voiceError) && (
+                <div className="chart-card" style={{ marginBottom: '24px', border: isListening ? '1px solid #ef4444' : voiceResult ? '1px solid #10b981' : '1px solid var(--border-glass)' }}>
+                    {/* 듣는 중 */}
+                    {isListening && (
+                        <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
+                                <span style={{
+                                    width: '12px', height: '12px', borderRadius: '50%', background: '#ef4444',
+                                    animation: 'pulse 1s ease-in-out infinite', display: 'inline-block',
+                                }} />
+                                <span style={{ fontSize: '14px', fontWeight: 600 }}>🎤 듣고 있어요...</span>
+                            </div>
+                            {voiceText && (
+                                <div style={{
+                                    padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-tertiary)',
+                                    fontSize: '15px', fontWeight: 500, color: 'var(--text-primary)',
+                                }}>
+                                    &ldquo;{voiceText}&rdquo;
+                                </div>
+                            )}
+                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '8px' }}>
+                                &ldquo;아침에 닭가슴살 200g 먹었어&rdquo; 처럼 말해주세요
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 처리 중 */}
+                    {!isListening && voiceProcessing && (
+                        <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                            <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-blue)', marginBottom: '8px' }} />
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                🤖 &ldquo;{voiceText}&rdquo; 영양 정보 검색 중...
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 결과 확인 */}
+                    {voiceResult && (
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                <CheckCircle2 size={18} style={{ color: '#10b981' }} />
+                                <span style={{ fontSize: '14px', fontWeight: 600 }}>음성 인식 완료</span>
+                                <span style={{
+                                    fontSize: '10px', padding: '2px 8px', borderRadius: '10px', fontWeight: 600,
+                                    background: voiceResult.source === 'local' ? 'rgba(16,185,129,0.15)' : 'rgba(102,126,234,0.15)',
+                                    color: voiceResult.source === 'local' ? '#10b981' : '#667eea',
+                                }}>
+                                    {voiceResult.source === 'local' ? '📦 로컬 DB' : '🤖 AI 분석'}
+                                </span>
+                            </div>
+                            <div style={{
+                                padding: '12px', borderRadius: '8px', background: 'var(--bg-tertiary)',
+                                marginBottom: '12px',
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+                                    <div>
+                                        <span style={{ fontWeight: 700, fontSize: '15px' }}>{voiceResult.name}</span>
+                                        <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginLeft: '8px' }}>
+                                            → {MEAL_CONFIG[voiceResult.meal].emoji} {MEAL_CONFIG[voiceResult.meal].label}
+                                        </span>
+                                    </div>
+                                    <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent-blue)', fontFamily: 'monospace' }}>
+                                        {voiceResult.calories}kcal
+                                    </span>
+                                </div>
+                                {voiceResult.description && (
+                                    <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '6px' }}>{voiceResult.description}</div>
+                                )}
+                                <div style={{ display: 'flex', gap: '12px', fontSize: '12px' }}>
+                                    <span style={{ color: '#10b981', fontWeight: 600 }}>단백질 {voiceResult.protein}g</span>
+                                    <span style={{ color: '#3b82f6', fontWeight: 600 }}>탄수화물 {voiceResult.carbs}g</span>
+                                    <span style={{ color: '#f59e0b', fontWeight: 600 }}>지방 {voiceResult.fat}g</span>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btn btn-primary btn-sm" onClick={handleVoiceConfirm} style={{ flex: 1 }}>
+                                    ✅ 등록
+                                </button>
+                                <button className="btn btn-secondary btn-sm" onClick={startListening} style={{ flex: 1 }}>
+                                    🎤 다시 말하기
+                                </button>
+                                <button className="btn btn-secondary btn-sm" onClick={handleVoiceCancel}>
+                                    취소
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 오류 */}
+                    {voiceError && !voiceResult && !voiceProcessing && !isListening && (
+                        <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                            <div style={{ fontSize: '13px', color: '#ef4444', marginBottom: '10px' }}>⚠️ {voiceError}</div>
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                <button className="btn btn-secondary btn-sm" onClick={startListening}>🎤 다시 시도</button>
+                                <button className="btn btn-secondary btn-sm" onClick={handleVoiceCancel}>닫기</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* 업로드 썸네일 그리드 */}
             {pendingFiles.length > 0 && (
