@@ -35,6 +35,15 @@ interface ChatRequestBody {
     };
 }
 
+function getKSTNow(): { date: string; hour: number; timeStr: string } {
+    const now = new Date();
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const date = kst.toISOString().split('T')[0];
+    const hour = kst.getUTCHours();
+    const min = String(kst.getUTCMinutes()).padStart(2, '0');
+    return { date, hour, timeStr: `${hour}:${min}` };
+}
+
 function getKSTDateString(offsetDays = 0): string {
     const now = new Date();
     // KST = UTC+9
@@ -43,18 +52,22 @@ function getKSTDateString(offsetDays = 0): string {
     return kst.toISOString().split('T')[0];
 }
 
-function findMissingFoodDays(foodLogs: any[], days = 7): string[] {
+function findMissingFoodDays(foodLogs: any[], kstHour: number, days = 7): string[] {
     const loggedDates = new Set((foodLogs || []).map((l: any) => l.date));
     const missing: string[] = [];
     for (let i = 0; i < days; i++) {
         const dateStr = getKSTDateString(i);
+        // 오늘(i=0)은 오전 10시 이후부터만 미기입으로 체크
+        // (아침 일찍엔 아직 식사 전이므로 잔소리 방지)
+        if (i === 0 && kstHour < 10) continue;
         if (!loggedDates.has(dateStr)) missing.push(dateStr);
     }
     return missing;
 }
 
 function buildContextMessage(healthData: ChatRequestBody['healthData']): string {
-    const parts: string[] = ['[회원 건강 데이터]'];
+    const { date: todayDate, hour: kstHour, timeStr } = getKSTNow();
+    const parts: string[] = [`[회원 건강 데이터] (현재 시각: ${timeStr} KST, 오늘: ${todayDate})`];
 
     if (healthData.records?.length > 0) {
         const sorted = [...healthData.records].sort(
@@ -77,21 +90,41 @@ function buildContextMessage(healthData: ChatRequestBody['healthData']): string 
         }
     }
 
-    if (healthData.foodLogs?.length > 0) {
-        const sorted = [...healthData.foodLogs].sort((a, b) => b.date.localeCompare(a.date));
-        parts.push('\n## 최근 식단 (3일)');
-        sorted.slice(0, 3).forEach(log => {
-            const cal = log.entries.reduce((s: number, e: any) => s + (e.calories || 0), 0);
-            const p = log.entries.reduce((s: number, e: any) => s + (e.protein || 0), 0);
-            parts.push(`${log.date}: ${cal}kcal / 단백질 ${p.toFixed(0)}g`);
-            log.entries.forEach((e: any) => {
-                const m: Record<string, string> = { breakfast: '아침', lunch: '점심', dinner: '저녁', snack: '간식' };
-                parts.push(`  [${m[e.meal] || e.meal}] ${e.name} ${e.calories}kcal`);
-            });
+    // 오늘 식단 별도 표시 (가장 최신 데이터 기준)
+    const todayLog = healthData.foodLogs?.find((l: any) => l.date === todayDate);
+    if (todayLog?.entries?.length > 0) {
+        const mealMap: Record<string, string> = { breakfast: '아침', lunch: '점심', dinner: '저녁', snack: '간식' };
+        const todayCal = todayLog.entries.reduce((s: number, e: any) => s + (e.calories || 0), 0);
+        const todayP = todayLog.entries.reduce((s: number, e: any) => s + (e.protein || 0), 0);
+        const mealTypes = [...new Set(todayLog.entries.map((e: any) => mealMap[e.meal] || e.meal))];
+        parts.push(`\n## 오늘 식단 (${todayDate}, 입력된 끼니: ${mealTypes.join('·')})`);
+        parts.push(`총 ${todayCal}kcal / 단백질 ${todayP.toFixed(0)}g`);
+        todayLog.entries.forEach((e: any) => {
+            parts.push(`  [${mealMap[e.meal] || e.meal}] ${e.name} ${e.calories}kcal`);
         });
+    } else {
+        parts.push(`\n## 오늘 식단 (${todayDate}): 미입력`);
     }
 
-    const missingDays = findMissingFoodDays(healthData.foodLogs);
+    if (healthData.foodLogs?.length > 0) {
+        const sorted = [...healthData.foodLogs]
+            .filter((l: any) => l.date !== todayDate)
+            .sort((a, b) => b.date.localeCompare(a.date));
+        if (sorted.length > 0) {
+            parts.push('\n## 최근 식단 (이전 3일)');
+            sorted.slice(0, 3).forEach(log => {
+                const cal = log.entries.reduce((s: number, e: any) => s + (e.calories || 0), 0);
+                const p = log.entries.reduce((s: number, e: any) => s + (e.protein || 0), 0);
+                parts.push(`${log.date}: ${cal}kcal / 단백질 ${p.toFixed(0)}g`);
+                log.entries.forEach((e: any) => {
+                    const m: Record<string, string> = { breakfast: '아침', lunch: '점심', dinner: '저녁', snack: '간식' };
+                    parts.push(`  [${m[e.meal] || e.meal}] ${e.name} ${e.calories}kcal`);
+                });
+            });
+        }
+    }
+
+    const missingDays = findMissingFoodDays(healthData.foodLogs, kstHour);
     if (missingDays.length > 0) {
         parts.push(`\n## ⚠️ 식단 미기입: ${missingDays.join(', ')} (${missingDays.length}일) — 반드시 언급할 것!`);
     }
