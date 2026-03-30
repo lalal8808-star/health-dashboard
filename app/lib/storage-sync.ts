@@ -14,9 +14,9 @@ const SYNC_KEYS = [
     'health-dashboard-workout-logs',
     'health-dashboard-food-logs',
     'health-dashboard-meal-presets',
-    'health-dashboard-food-items',
-    'health-dashboard-chat-messages',
     'health-dashboard-date-modes',
+    // 'health-dashboard-food-items' — 기본 DB는 코드에 내장, 동기화 불필요
+    // 'health-dashboard-chat-messages' — 디바이스 고유 대화, 동기화하면 대역폭 폭증
 ] as const;
 
 export type SyncKey = typeof SYNC_KEYS[number];
@@ -128,17 +128,8 @@ function smartMerge(key: SyncKey, serverData: unknown, localData: unknown): unkn
         );
     }
 
-    if (key === 'health-dashboard-meal-presets' || key === 'health-dashboard-food-items') {
+    if (key === 'health-dashboard-meal-presets') {
         return mergeById(serverData as { id: string }[], localData as { id: string }[]);
-    }
-
-    if (key === 'health-dashboard-chat-messages') {
-        return mergeById(
-            serverData as { id: string }[],
-            localData as { id: string }[],
-            (a: any, b: any) =>
-                new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
-        );
     }
 
     return serverData.length >= localData.length ? serverData : localData;

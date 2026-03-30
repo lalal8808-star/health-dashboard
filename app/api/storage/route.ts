@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // 허용된 키 목록 (보안: 임의 키 방지)
+// chat-messages, food-items 제외 → 대역폭 절감
 const ALLOWED_KEYS = new Set([
     'health-dashboard-records',
     'health-dashboard-workout-logs',
     'health-dashboard-food-logs',
     'health-dashboard-meal-presets',
-    'health-dashboard-chat-messages',   // 챗봇 크로스기기 동기화
-    'health-dashboard-food-items',      // 음식 DB 크로스기기 동기화
+    'health-dashboard-date-modes',
 ]);
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
@@ -100,7 +100,9 @@ export async function GET(req: NextRequest) {
     // 배치 모드: /api/storage?key=all → 모든 키 한 번에 반환
     if (key === 'all') {
         const data = await kvGetAll();
-        return NextResponse.json(data);
+        return NextResponse.json(data, {
+            headers: { 'Cache-Control': 'no-store' },
+        });
     }
 
     if (!key || !ALLOWED_KEYS.has(key)) {

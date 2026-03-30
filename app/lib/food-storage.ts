@@ -110,7 +110,7 @@ export function loadPresetToDate(
 }
 
 // ── 음식 데이터베이스 (미리 저장된 음식 아이템) ──────────────────────────
-const FOOD_ITEMS_STORAGE_KEY = 'health-dashboard-food-items' as const;
+const FOOD_ITEMS_STORAGE_KEY = 'health-dashboard-food-items';
 
 // 기본 음식 목록 (50개)
 const DEFAULT_FOOD_ITEMS: FoodItem[] = [
@@ -193,7 +193,7 @@ export function getFoodItems(): FoodItem[] {
     try {
         const data = localStorage.getItem(FOOD_ITEMS_STORAGE_KEY);
         if (!data) {
-            syncedSetItem(FOOD_ITEMS_STORAGE_KEY, DEFAULT_FOOD_ITEMS);
+            localStorage.setItem(FOOD_ITEMS_STORAGE_KEY, JSON.stringify(DEFAULT_FOOD_ITEMS));
             return DEFAULT_FOOD_ITEMS;
         }
         const saved: FoodItem[] = JSON.parse(data);
@@ -202,7 +202,7 @@ export function getFoodItems(): FoodItem[] {
         const missing = DEFAULT_FOOD_ITEMS.filter(i => !savedIds.has(i.id));
         if (missing.length > 0) {
             const merged = [...saved, ...missing];
-            syncedSetItem(FOOD_ITEMS_STORAGE_KEY, merged);
+            localStorage.setItem(FOOD_ITEMS_STORAGE_KEY, JSON.stringify(merged));
             return merged;
         }
         return saved;
@@ -219,12 +219,13 @@ export function saveFoodItem(item: FoodItem): void {
     } else {
         items.unshift(item);
     }
-    syncedSetItem(FOOD_ITEMS_STORAGE_KEY, items);
+    // 음식 DB는 로컬에만 저장 (Redis 동기화 불필요 — 대역폭 절감)
+    localStorage.setItem(FOOD_ITEMS_STORAGE_KEY, JSON.stringify(items));
 }
 
 export function deleteFoodItem(id: string): void {
     const items = getFoodItems().filter(i => i.id !== id);
-    syncedSetItem(FOOD_ITEMS_STORAGE_KEY, items);
+    localStorage.setItem(FOOD_ITEMS_STORAGE_KEY, JSON.stringify(items));
 }
 
 export function searchFoodItems(query: string): FoodItem[] {
