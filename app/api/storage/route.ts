@@ -38,14 +38,16 @@ async function kvGet(key: string): Promise<unknown> {
     }
 }
 
-// SET key value → pipeline [["SET", key, json_string]]
+const REDIS_TTL_SEC = 60 * 60 * 24 * 90; // 90일 TTL (무기한 누적 방지)
+
+// SET key value EX ttl → pipeline [["SET", key, json_string, "EX", ttl]]
 async function kvSet(key: string, value: unknown): Promise<void> {
     if (!REDIS_URL || !REDIS_TOKEN) return;
     try {
         await fetch(`${REDIS_URL}/pipeline`, {
             method: 'POST',
             headers: headers(),
-            body: JSON.stringify([['SET', key, JSON.stringify(value)]]),
+            body: JSON.stringify([['SET', key, JSON.stringify(value), 'EX', REDIS_TTL_SEC]]),
         });
     } catch (e) {
         console.error('[storage] kvSet error:', e);
@@ -81,7 +83,7 @@ async function kvSetMulti(entries: Record<string, unknown>): Promise<void> {
     if (!REDIS_URL || !REDIS_TOKEN) return;
     try {
         const pipeline = Object.entries(entries).map(
-            ([key, value]) => ['SET', key, JSON.stringify(value)]
+            ([key, value]) => ['SET', key, JSON.stringify(value), 'EX', REDIS_TTL_SEC]
         );
         await fetch(`${REDIS_URL}/pipeline`, {
             method: 'POST',

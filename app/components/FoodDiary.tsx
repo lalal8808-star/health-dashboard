@@ -9,6 +9,7 @@ import {
     getFoodItems, saveFoodItem, searchFoodItems,
 } from '@/app/lib/food-storage';
 import { getLatestRecord } from '@/app/lib/storage';
+import { compressImage } from '@/app/lib/image-utils';
 import {
     Plus, Trash2, ChevronLeft, ChevronRight,
     Loader2, CheckCircle2, XCircle, ImagePlus,
@@ -173,8 +174,9 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
     const analyzeOne = useCallback(async (pf: PendingFile, date: string, meal: MealKey) => {
         setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, status: 'analyzing' } : f));
         try {
+            const compressed = await compressImage(pf.file);
             const formData = new FormData();
-            formData.append('image', pf.file);
+            formData.append('image', compressed, 'image.jpg');
             const res = await fetch('/api/food-analyze', { method: 'POST', body: formData });
             const data = await res.json();
             if (data.success) {

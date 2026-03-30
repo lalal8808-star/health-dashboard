@@ -126,13 +126,22 @@ export default function DietChatbot({ syncVersion = 0 }: DietChatbotProps) {
             alert('10MB 이하 이미지만 업로드할 수 있습니다.');
             return;
         }
-        const reader = new FileReader();
-        reader.onload = () => {
-            const dataUrl = reader.result as string;
+        // Canvas로 리사이즈 + 압축 (최대 1024px, JPEG 85%) → 대역폭 절감
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            const MAX = 1024;
+            const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
             const base64 = dataUrl.split(',')[1];
-            setPendingImage({ base64, mimeType: file.type, preview: dataUrl });
+            setPendingImage({ base64, mimeType: 'image/jpeg', preview: dataUrl });
         };
-        reader.readAsDataURL(file);
+        img.src = objectUrl;
     }, []);
 
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {

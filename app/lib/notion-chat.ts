@@ -64,25 +64,34 @@ export async function readRecentChats(limit = 20): Promise<{ question: string; a
     }
 }
 
+// 스키마 조회 결과 메모리 캐시 (서버 프로세스 재시작 전까지 유지)
+let cachedTitlePropName: string | null = null;
+
+async function getTitlePropName(notion: Client, dbId: string): Promise<string> {
+    if (cachedTitlePropName) return cachedTitlePropName;
+    try {
+        const db = await (notion.databases as any).retrieve({ database_id: dbId });
+        const props: Record<string, any> = db?.properties || {};
+        for (const [name, prop] of Object.entries(props)) {
+            if ((prop as any).type === 'title') {
+                cachedTitlePropName = name;
+                return name;
+            }
+        }
+    } catch (schemaErr: any) {
+        console.error('[Notion] schema 조회 실패 (기본값 사용):', schemaErr?.message);
+    }
+    cachedTitlePropName = '제목';
+    return cachedTitlePropName;
+}
+
 export async function saveChatEntry(question: string, answer: string): Promise<void> {
     try {
         const notion = getNotion();
         const dbId = getDbId();
 
-        // 1) DB 스키마 조회 → 실제 title 속성명 자동 감지
-        let titlePropName = '제목';
-        try {
-            const db = await (notion.databases as any).retrieve({ database_id: dbId });
-            const props: Record<string, any> = db?.properties || {};
-            for (const [name, prop] of Object.entries(props)) {
-                if ((prop as any).type === 'title') {
-                    titlePropName = name;
-                    break;
-                }
-            }
-        } catch (schemaErr: any) {
-            console.error('[Notion] schema 조회 실패 (기본값 사용):', schemaErr?.message);
-        }
+        // 스키마 조회는 최초 1회만 (이후 캐시 사용)
+        const titlePropName = await getTitlePropName(notion, dbId);
 
         const title = question.slice(0, 80).replace(/\n/g, ' ');
         const category = categorize(question);

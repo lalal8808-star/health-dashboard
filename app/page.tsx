@@ -31,6 +31,7 @@ import {
   generateId,
 } from '@/app/lib/storage';
 import { parseInBodyCSV, CSVParseResult } from '@/app/lib/csv-parser';
+import { compressImage } from '@/app/lib/image-utils';
 import { sampleRecords } from '@/app/lib/sample-data';
 import { TabType, AnalysisRecord, HealthMetrics, ChartDataPoint } from '@/app/lib/types';
 
@@ -91,8 +92,9 @@ export default function Home() {
       setProgress(20);
       setProgressMessage('AI가 이미지를 분석하고 있습니다...');
 
+      const compressed = await compressImage(file);
       const formData = new FormData();
-      formData.append('image', file);
+      formData.append('image', compressed, 'image.jpg');
 
       const analyzeRes = await fetch('/api/analyze', { method: 'POST', body: formData });
 
