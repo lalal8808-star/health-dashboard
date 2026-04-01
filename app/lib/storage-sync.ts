@@ -25,20 +25,23 @@ export type SyncKey = typeof SYNC_KEYS[number];
 // 2초 안에 여러 키가 저장되면 한 번의 batch POST로 전송
 const pendingWrites = new Map<SyncKey, unknown>();
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
+let flushPromise: Promise<void> | null = null; // in-flight 추적
 const WRITE_DEBOUNCE_MS = 2_000;
 
-function flushWrites() {
-    if (pendingWrites.size === 0) return;
+function flushWrites(): Promise<void> {
+    if (pendingWrites.size === 0) return Promise.resolve();
     const entries: Record<string, unknown> = {};
     pendingWrites.forEach((data, key) => { entries[key] = data; });
     pendingWrites.clear();
     writeTimer = null;
 
-    fetch('/api/storage?key=batch', {
+    flushPromise = fetch('/api/storage?key=batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entries),
-    }).catch(() => {});
+    }).then(() => { flushPromise = null; }).catch(() => { flushPromise = null; });
+
+    return flushPromise;
 }
 
 /** localStorage 저장 + 2초 디바운스 후 서버 배치 동기화 */
@@ -50,13 +53,12 @@ export function syncedSetItem(key: SyncKey, data: unknown): void {
 }
 
 /** localStorage 저장 + 즉시 서버 업로드 (삭제 등 즉시 반영이 필요한 경우) */
-export function syncedSetItemNow(key: SyncKey, data: unknown): void {
+export async function syncedSetItemNow(key: SyncKey, data: unknown): Promise<void> {
     localStorage.setItem(key, JSON.stringify(data));
-    // 대기 중인 디바운스 취소 후 해당 키를 포함해 즉시 flush
     if (writeTimer) clearTimeout(writeTimer);
     writeTimer = null;
     pendingWrites.set(key, data);
-    flushWrites();
+    await flushWrites(); // await로 완료 보장
 }
 
 // ── 스마트 병합 ──────────────────────────────────────
@@ -141,11 +143,14 @@ function smartMerge(key: SyncKey, serverData: unknown, localData: unknown): unkn
  * 1 GET 요청으로 모든 키를 읽음 (기존 6 GET → 1 GET)
  */
 export async function syncFromServer(): Promise<void> {
-    // 대기 중인 로컬 변경사항(삭제 포함)을 먼저 서버에 올린 후 읽기
+    // 대기 중인 쓰기 + in-flight 요청이 완료될 때까지 기다린 후 읽기
+    // (삭제 직후 syncFromServer가 실행되면 구버전 서버 데이터를 읽는 경쟁 방지)
     if (pendingWrites.size > 0) {
-        flushWrites();
-        await new Promise(r => setTimeout(r, 300)); // flush가 서버에 반영될 시간
+        await flushWrites();
+    } else if (flushPromise) {
+        await flushPromise;
     }
+
     try {
         const res = await fetch('/api/storage?key=all', { cache: 'no-store' });
         if (!res.ok) return;
@@ -171,9 +176,14 @@ export async function syncFromServer(): Promise<void> {
             const merged = smartMerge(key as SyncKey, serverData, localData);
             localStorage.setItem(key, JSON.stringify(merged));
 
+            // 서버보다 항목이 많거나, food/workout 로그에 로컬 변경(updatedAt)이 있으면 역업로드
             const serverLen = Array.isArray(serverData) ? serverData.length : 0;
             const mergedLen = Array.isArray(merged) ? merged.length : 0;
-            if (mergedLen > serverLen) {
+            const isFoodOrWorkout = key === 'health-dashboard-food-logs' || key === 'health-dashboard-workout-logs';
+            const hasLocalUpdates = isFoodOrWorkout && Array.isArray(localData) &&
+                localData.some((item: any) => item?.updatedAt);
+
+            if (mergedLen > serverLen || hasLocalUpdates) {
                 toUpload[key] = merged;
             }
         }

@@ -37,12 +37,9 @@ export function deleteFoodEntry(date: string, entryId: string): void {
     const idx = logs.findIndex(l => l.date === date);
     if (idx >= 0) {
         logs[idx].entries = logs[idx].entries.filter(e => e.id !== entryId);
-        if (logs[idx].entries.length === 0) {
-            logs.splice(idx, 1);
-        } else {
-            logs[idx].updatedAt = new Date().toISOString();
-        }
-        // 삭제는 즉시 서버 반영 (디바운스 없음 - sync 경쟁 방지)
+        // entries가 0개가 되어도 splice하지 않고 updatedAt을 남겨둠
+        // → mergeByDate가 "삭제된 상태"를 인식해 서버 구버전으로 덮어씌워지는 것 방지
+        logs[idx].updatedAt = new Date().toISOString();
         syncedSetItemNow(FOOD_STORAGE_KEY, logs);
     }
 }
