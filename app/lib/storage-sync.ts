@@ -176,14 +176,27 @@ export async function syncFromServer(): Promise<void> {
             const merged = smartMerge(key as SyncKey, serverData, localData);
             localStorage.setItem(key, JSON.stringify(merged));
 
-            // 서버보다 항목이 많거나, food/workout 로그에 로컬 변경(updatedAt)이 있으면 역업로드
+            // 로컬이 서버보다 최신인 경우만 역업로드 (무한루프 방지)
+            // food/workout: 로컬에 서버보다 최신 updatedAt이 있을 때만 업로드
             const serverLen = Array.isArray(serverData) ? serverData.length : 0;
             const mergedLen = Array.isArray(merged) ? merged.length : 0;
             const isFoodOrWorkout = key === 'health-dashboard-food-logs' || key === 'health-dashboard-workout-logs';
-            const hasLocalUpdates = isFoodOrWorkout && Array.isArray(localData) &&
-                localData.some((item: any) => item?.updatedAt);
 
-            if (mergedLen > serverLen || hasLocalUpdates) {
+            let shouldUpload = mergedLen > serverLen;
+            if (!shouldUpload && isFoodOrWorkout && Array.isArray(localData) && Array.isArray(serverData)) {
+                // 로컬에 updatedAt이 있고 서버의 같은 날짜보다 더 최신인 항목이 있을 때만 업로드
+                const serverByDate = new Map((serverData as any[]).map((r: any) => [r.date, r]));
+                shouldUpload = (localData as any[]).some((localItem: any) => {
+                    if (!localItem?.updatedAt) return false;
+                    const serverItem = serverByDate.get(localItem.date);
+                    if (!serverItem) return true; // 서버에 없는 날짜
+                    const serverTime = serverItem.updatedAt ? new Date(serverItem.updatedAt).getTime() : 0;
+                    const localTime = new Date(localItem.updatedAt).getTime();
+                    return localTime > serverTime; // 로컬이 더 최신일 때만
+                });
+            }
+
+            if (shouldUpload) {
                 toUpload[key] = merged;
             }
         }
