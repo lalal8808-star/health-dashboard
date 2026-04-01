@@ -19,7 +19,7 @@ export default function StorageSync({ onSynced }: StorageSyncProps) {
     const isSyncing = useRef(false);
     const lastSyncedAt = useRef(0);
     const onSyncedRef = useRef(onSynced);
-    useEffect(() => { onSyncedRef.current = onSynced; }, [onSynced]);
+    onSyncedRef.current = onSynced; // 렌더 중 직접 갱신 (useEffect 불필요)
 
     useEffect(() => {
         const sync = async (force = false) => {

@@ -68,6 +68,13 @@ export default function Home() {
     setChartData(getChartData());
   }, []);
 
+  // 안정된 콜백 — 매 렌더마다 새 함수 생성 방지 (무한 sync 원인 차단)
+  const handleSynced = useCallback(() => {
+    refreshData();
+    setChatSyncVersion(v => v + 1);
+    setDiarySyncVersion(v => v + 1);
+  }, [refreshData]);
+
   // Initialize: 날짜 중복 정리 후 샘플 데이터 초기화
   useEffect(() => {
     // ① 기존 데이터 날짜 중복 제거 (한 날짜에 1개만 유지, 최신 기준)
@@ -145,37 +152,7 @@ export default function Home() {
       setProgress(100);
       setProgressMessage('분석이 완료되었습니다!');
 
-      // Slack 인바디 알림 (설정된 경우)
-      fetch('/api/slack-settings')
-        .then(r => r.json())
-        .then(async (cfg) => {
-          if (!cfg?.webhookUrl || !cfg?.settings?.inbodyAlert) return;
-          await fetch('/api/slack-notify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              webhookUrl: cfg.webhookUrl,
-              message: {
-                text: `💪 새 인바디 결과 - ${newRecord.metrics.date || newRecord.createdAt.slice(0,10)}`,
-                blocks: [
-                  { type: 'header', text: { type: 'plain_text', text: `💪 인바디 결과 - ${newRecord.metrics.date || newRecord.createdAt.slice(0,10)}` } },
-                  { type: 'divider' },
-                  {
-                    type: 'section',
-                    fields: [
-                      newRecord.metrics.weight != null && { type: 'mrkdwn', text: `*⚖️ 체중*\n${newRecord.metrics.weight}kg` },
-                      newRecord.metrics.skeletalMuscle != null && { type: 'mrkdwn', text: `*💪 골격근량*\n${newRecord.metrics.skeletalMuscle}kg` },
-                      newRecord.metrics.bodyFatPercent != null && { type: 'mrkdwn', text: `*🔥 체지방률*\n${newRecord.metrics.bodyFatPercent}%` },
-                      newRecord.metrics.bodyFatMass != null && { type: 'mrkdwn', text: `*🏋️ 체지방량*\n${newRecord.metrics.bodyFatMass}kg` },
-                      newRecord.metrics.bmi != null && { type: 'mrkdwn', text: `*📊 BMI*\n${newRecord.metrics.bmi}` },
-                    ].filter(Boolean),
-                  },
-                ],
-              },
-            }),
-          });
-        })
-        .catch(() => {});
+      // inbodyAlert 기능 삭제됨 — 불필요한 /api/slack-settings 호출 제거
 
       setTimeout(() => {
         refreshData();
@@ -280,11 +257,7 @@ export default function Home() {
   return (
     <div className="app-container">
       {/* Server Sync (invisible) */}
-      <StorageSync onSynced={() => {
-        refreshData();
-        setChatSyncVersion(v => v + 1);
-        setDiarySyncVersion(v => v + 1);
-      }} />
+      <StorageSync onSynced={handleSynced} />
 
       {/* Mobile Header */}
       <div className="mobile-header">

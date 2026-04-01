@@ -138,20 +138,25 @@ function smartMerge(key: SyncKey, serverData: unknown, localData: unknown): unkn
 }
 
 // ── 서버 동기화 (배치 API 사용) ──────────────────────────────
+let isSyncInProgress = false; // 동시 실행 방지 락
+
 /**
  * 페이지 로드 / 탭 전환 시 호출: 서버 ↔ 로컬 양방향 스마트 병합
- * 1 GET 요청으로 모든 키를 읽음 (기존 6 GET → 1 GET)
+ * 1 GET 요청으로 모든 키를 읽음
  */
 export async function syncFromServer(): Promise<void> {
-    // 대기 중인 쓰기 + in-flight 요청이 완료될 때까지 기다린 후 읽기
-    // (삭제 직후 syncFromServer가 실행되면 구버전 서버 데이터를 읽는 경쟁 방지)
-    if (pendingWrites.size > 0) {
-        await flushWrites();
-    } else if (flushPromise) {
-        await flushPromise;
-    }
+    // 이미 동기화 중이면 스킵 (동시 호출로 인한 중복 요청 방지)
+    if (isSyncInProgress) return;
+    isSyncInProgress = true;
 
     try {
+        // 대기 중인 쓰기 완료 대기
+        if (pendingWrites.size > 0) {
+            await flushWrites();
+        } else if (flushPromise) {
+            await flushPromise;
+        }
+
         const res = await fetch('/api/storage?key=all', { cache: 'no-store' });
         if (!res.ok) return;
         const serverAll = await res.json() as Record<string, unknown>;
@@ -177,22 +182,20 @@ export async function syncFromServer(): Promise<void> {
             localStorage.setItem(key, JSON.stringify(merged));
 
             // 로컬이 서버보다 최신인 경우만 역업로드 (무한루프 방지)
-            // food/workout: 로컬에 서버보다 최신 updatedAt이 있을 때만 업로드
             const serverLen = Array.isArray(serverData) ? serverData.length : 0;
             const mergedLen = Array.isArray(merged) ? merged.length : 0;
             const isFoodOrWorkout = key === 'health-dashboard-food-logs' || key === 'health-dashboard-workout-logs';
 
             let shouldUpload = mergedLen > serverLen;
             if (!shouldUpload && isFoodOrWorkout && Array.isArray(localData) && Array.isArray(serverData)) {
-                // 로컬에 updatedAt이 있고 서버의 같은 날짜보다 더 최신인 항목이 있을 때만 업로드
                 const serverByDate = new Map((serverData as any[]).map((r: any) => [r.date, r]));
                 shouldUpload = (localData as any[]).some((localItem: any) => {
                     if (!localItem?.updatedAt) return false;
                     const serverItem = serverByDate.get(localItem.date);
-                    if (!serverItem) return true; // 서버에 없는 날짜
+                    if (!serverItem) return true;
                     const serverTime = serverItem.updatedAt ? new Date(serverItem.updatedAt).getTime() : 0;
                     const localTime = new Date(localItem.updatedAt).getTime();
-                    return localTime > serverTime; // 로컬이 더 최신일 때만
+                    return localTime > serverTime;
                 });
             }
 
@@ -201,15 +204,21 @@ export async function syncFromServer(): Promise<void> {
             }
         }
 
-        // 역업로드가 필요한 키들 배치 전송 (1 POST)
+        // 역업로드 — await로 완료 보장 (fire-and-forget 제거)
         if (Object.keys(toUpload).length > 0) {
-            fetch('/api/storage?key=batch', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(toUpload),
-            }).catch(() => {});
+            try {
+                await fetch('/api/storage?key=batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(toUpload),
+                });
+            } catch {
+                // 네트워크 오류는 무시 — 다음 sync에서 재시도
+            }
         }
     } catch {
         // 네트워크 오류 → localStorage로 그대로 동작
+    } finally {
+        isSyncInProgress = false;
     }
 }

@@ -281,38 +281,7 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
         setFoodSearch('');
         e.currentTarget.reset();
 
-        // 칼로리 목표 달성 알림 (저장 후 총 칼로리 확인)
-        const log = getFoodLogByDate(selectedDate);
-        const newTotal = (log?.entries ?? []).reduce((s, en) => s + (en.calories || 0), 0) + calories;
-        const prevTotal = newTotal - calories;
-        const target = bmrInfo.targetCalories;
-        if (target > 0 && prevTotal < target && newTotal >= target * 0.9 && newTotal <= target * 1.1) {
-            fetch('/api/slack-settings')
-                .then(r => r.json())
-                .then(async (cfg) => {
-                    if (!cfg?.webhookUrl || !cfg?.settings?.goalAlert) return;
-                    await fetch('/api/slack-notify', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            webhookUrl: cfg.webhookUrl,
-                            message: {
-                                text: '🎯 칼로리 목표 달성!',
-                                blocks: [
-                                    {
-                                        type: 'section',
-                                        text: {
-                                            type: 'mrkdwn',
-                                            text: `🎯 *칼로리 목표 달성!*\n오늘 ${Math.round(newTotal)}kcal 섭취로 목표 ${target}kcal를 달성했어요! 💪`,
-                                        },
-                                    },
-                                ],
-                            },
-                        }),
-                    });
-                })
-                .catch(() => {});
-        }
+        // goalAlert 기능 삭제됨 — 불필요한 /api/slack-settings 호출 제거
     };
 
     const handleSelectFood = (food: FoodItem) => {
