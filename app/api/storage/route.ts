@@ -139,7 +139,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (!key || !ALLOWED_KEYS.has(key)) {
-        return NextResponse.json({ error: 'Invalid key' }, { status: 400 });
+        // 구버전 클라이언트가 삭제된 키로 요청 → 조용히 성공 응답 (400 루프 방지)
+        return NextResponse.json({ success: true });
     }
     try {
         const data = await req.json();
