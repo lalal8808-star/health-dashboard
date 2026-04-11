@@ -56,7 +56,8 @@ export function getTotalCalories(log: DailyFoodLog): { calories: number; protein
 // ── 식단 프리셋 (저장된 식단 템플릿) ──────────────────────────
 const PRESET_STORAGE_KEY = 'health-dashboard-meal-presets' as const;
 
-export function getMealPresets(): MealPreset[] {
+/** 내부용: 소프트 삭제 tombstone 포함 전체 목록 반환 */
+function getAllMealPresetsRaw(): MealPreset[] {
     if (typeof window === 'undefined') return [];
     try {
         const data = localStorage.getItem(PRESET_STORAGE_KEY);
@@ -66,20 +67,36 @@ export function getMealPresets(): MealPreset[] {
     }
 }
 
+/** deletedAt이 있는 항목(소프트 삭제된 것)은 제외하고 반환 */
+export function getMealPresets(): MealPreset[] {
+    return getAllMealPresetsRaw().filter(p => !p.deletedAt);
+}
+
 export function saveMealPreset(preset: MealPreset): void {
-    const presets = getMealPresets();
+    const presets = getAllMealPresetsRaw();
     const idx = presets.findIndex(p => p.id === preset.id);
+    const now = new Date().toISOString();
+    const updated = { ...preset, updatedAt: now };
     if (idx >= 0) {
-        presets[idx] = preset;
+        presets[idx] = updated;
     } else {
-        presets.unshift(preset); // 최신 순 정렬
+        presets.unshift(updated); // 최신 순 정렬
     }
     syncedSetItem(PRESET_STORAGE_KEY, presets);
 }
 
+/**
+ * 소프트 삭제: 실제로 배열에서 제거하지 않고 deletedAt을 기록합니다.
+ * mergeById(서버+로컬 유니온) 시 tombstone이 없으면 서버 구버전이 복원되는 버그를 방지합니다.
+ */
 export function deleteMealPreset(id: string): void {
-    const presets = getMealPresets().filter(p => p.id !== id);
-    syncedSetItem(PRESET_STORAGE_KEY, presets);
+    const presets = getAllMealPresetsRaw();
+    const idx = presets.findIndex(p => p.id === id);
+    if (idx >= 0) {
+        const now = new Date().toISOString();
+        presets[idx] = { ...presets[idx], deletedAt: now, updatedAt: now };
+        syncedSetItemNow(PRESET_STORAGE_KEY, presets);
+    }
 }
 
 /** 프리셋의 음식들을 특정 날짜/식사에 일괄 추가 */

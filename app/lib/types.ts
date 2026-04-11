@@ -90,6 +90,8 @@ export interface MealPreset {
   entries: MealPresetEntry[];
   totalCalories: number;
   createdAt: string;         // ISO string
+  deletedAt?: string;        // ISO string — 소프트 삭제 tombstone (서버 재복원 방지)
+  updatedAt?: string;        // ISO string — 최종 수정 시각 (merge 충돌 해결용)
 }
 
 // Workout Log

@@ -68,8 +68,23 @@ function mergeById<T extends { id: string }>(
     sortFn?: (a: T, b: T) => number
 ): T[] {
     const map = new Map<string, T>();
+    // 서버 항목을 먼저 삽입
     server.forEach(r => { if (r?.id) map.set(r.id, r); });
-    local.forEach(r => { if (r?.id) map.set(r.id, r); });
+    // 로컬 항목: updatedAt이 있으면 최신 버전을 우선 채택 (tombstone 포함)
+    local.forEach(r => {
+        if (!r?.id) return;
+        const existing = map.get(r.id);
+        if (!existing) {
+            map.set(r.id, r);
+            return;
+        }
+        const existingTime = (existing as any).updatedAt ? new Date((existing as any).updatedAt).getTime() : 0;
+        const localTime = (r as any).updatedAt ? new Date((r as any).updatedAt).getTime() : 0;
+        // 로컬이 더 최신이거나 동일하면 로컬 우선 (삭제 tombstone 보존)
+        if (localTime >= existingTime) {
+            map.set(r.id, r);
+        }
+    });
     const merged = Array.from(map.values());
     return sortFn ? merged.sort(sortFn) : merged;
 }
@@ -192,6 +207,18 @@ export async function syncFromServer(): Promise<void> {
                 shouldUpload = (localData as any[]).some((localItem: any) => {
                     if (!localItem?.updatedAt) return false;
                     const serverItem = serverByDate.get(localItem.date);
+                    if (!serverItem) return true;
+                    const serverTime = serverItem.updatedAt ? new Date(serverItem.updatedAt).getTime() : 0;
+                    const localTime = new Date(localItem.updatedAt).getTime();
+                    return localTime > serverTime;
+                });
+            }
+            // meal-presets: updatedAt(삭제 tombstone 포함) 기준으로 역업로드 판단
+            if (!shouldUpload && key === 'health-dashboard-meal-presets' && Array.isArray(localData) && Array.isArray(serverData)) {
+                const serverById = new Map((serverData as any[]).map((r: any) => [r.id, r]));
+                shouldUpload = (localData as any[]).some((localItem: any) => {
+                    if (!localItem?.updatedAt) return false;
+                    const serverItem = serverById.get(localItem.id);
                     if (!serverItem) return true;
                     const serverTime = serverItem.updatedAt ? new Date(serverItem.updatedAt).getTime() : 0;
                     const localTime = new Date(localItem.updatedAt).getTime();

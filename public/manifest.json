@@ -1,8 +1,10 @@
 {
+    "id": "com.healthlens.ai",
     "name": "HealthLens AI",
     "short_name": "HealthLens",
     "description": "멀티모달 건강 지표 분석 및 대사 관리 대시보드",
     "start_url": "/",
+    "scope": "/",
     "display": "standalone",
     "background_color": "#0a0e1a",
     "theme_color": "#38bdf8",
@@ -12,13 +14,41 @@
             "src": "/icon-192.png",
             "sizes": "192x192",
             "type": "image/png",
-            "purpose": "any maskable"
+            "purpose": "any"
+        },
+        {
+            "src": "/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
         },
         {
             "src": "/icon-512.png",
             "sizes": "512x512",
             "type": "image/png",
-            "purpose": "any maskable"
+            "purpose": "any"
+        },
+        {
+            "src": "/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "대시보드",
+            "short_name": "대시보드",
+            "description": "건강 요약 보기",
+            "url": "/",
+            "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+        },
+        {
+            "name": "기록 업로드",
+            "short_name": "업로드",
+            "description": "새 결과지 업로드",
+            "url": "/?tab=upload",
+            "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
         }
     ]
 }
