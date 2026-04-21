@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
     LineChart,
     Line,
@@ -39,6 +40,8 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 };
 
 export default function HealthCharts({ chartData }: HealthChartsProps) {
+    const [viewMode, setViewMode] = useState<'scroll' | 'fit'>('scroll');
+
     if (chartData.length < 2) {
         return (
             <div className="no-data-message" style={{ gridColumn: '1 / -1' }}>
@@ -52,8 +55,47 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
     const tickColor = '#475569';
     const tickFont = { fontSize: 10, fill: tickColor, fontFamily: 'monospace' };
 
+    const getChartMinWidth = () => {
+        return viewMode === 'scroll' && chartData.length > 6 ? `${chartData.length * 45}px` : '100%';
+    };
+
     return (
         <>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+                <div style={{ background: 'var(--bg-tertiary)', padding: '2px', borderRadius: '8px', display: 'inline-flex' }}>
+                    <button
+                        onClick={() => setViewMode('scroll')}
+                        style={{
+                            padding: '4px 12px',
+                            fontSize: '12px',
+                            borderRadius: '6px',
+                            background: viewMode === 'scroll' ? 'var(--bg-primary)' : 'transparent',
+                            color: viewMode === 'scroll' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                            border: viewMode === 'scroll' ? '1px solid var(--border-glass)' : 'transparent',
+                            transition: 'all 0.2s',
+                            fontWeight: viewMode === 'scroll' ? 600 : 400,
+                        }}
+                    >
+                        최근(스크롤)
+                    </button>
+                    <button
+                        onClick={() => setViewMode('fit')}
+                        style={{
+                            padding: '4px 12px',
+                            fontSize: '12px',
+                            borderRadius: '6px',
+                            background: viewMode === 'fit' ? 'var(--bg-primary)' : 'transparent',
+                            color: viewMode === 'fit' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                            border: viewMode === 'fit' ? '1px solid var(--border-glass)' : 'transparent',
+                            transition: 'all 0.2s',
+                            fontWeight: viewMode === 'fit' ? 600 : 400,
+                        }}
+                    >
+                        전체(한눈에)
+                    </button>
+                </div>
+            </div>
+
             {/* 메인 차트: 체중·골격근량·체지방량 + 인바디 점수 */}
             <div className="charts-grid">
                 <div className="chart-card">
@@ -62,11 +104,11 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                         체중 · 골격근량 · 체지방량 변화
                     </div>
                     <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '8px' }}>
-                        <div style={{ minWidth: chartData.length > 6 ? `${chartData.length * 45}px` : '100%', height: 170 }}>
+                        <div style={{ minWidth: getChartMinWidth(), height: 170 }}>
                             <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                            <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} />
+                            <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} interval={viewMode === 'fit' ? 'preserveStartEnd' : 'preserveEnd'} minTickGap={20} />
                             <YAxis yAxisId="left" tickLine={false} axisLine={false} tick={tickFont} domain={['auto', 'auto']} />
                             <Tooltip content={<CustomTooltip />} />
                             <Line yAxisId="left" type="monotone" dataKey="weight" name="체중(kg)" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4, fill: '#3b82f6' }} activeDot={{ r: 6 }} />
@@ -84,11 +126,11 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                         인바디 점수 변화
                     </div>
                     <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '8px' }}>
-                        <div style={{ minWidth: chartData.length > 6 ? `${chartData.length * 45}px` : '100%', height: 170 }}>
+                        <div style={{ minWidth: getChartMinWidth(), height: 170 }}>
                             <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                            <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} />
+                            <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} interval={viewMode === 'fit' ? 'preserveStartEnd' : 'preserveEnd'} minTickGap={20} />
                             <YAxis tickLine={false} axisLine={false} tick={tickFont} domain={[70, 85]} />
                             <Tooltip content={<CustomTooltip />} />
                             <Bar dataKey="inbodyScore" name="점수" radius={[4, 4, 4, 4]}>
@@ -116,11 +158,11 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                         체지방률 (%)
                     </div>
                     <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '8px' }}>
-                        <div style={{ minWidth: chartData.length > 6 ? `${chartData.length * 45}px` : '100%', height: 130 }}>
+                        <div style={{ minWidth: getChartMinWidth(), height: 130 }}>
                             <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                            <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} />
+                            <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} interval={viewMode === 'fit' ? 'preserveStartEnd' : 'preserveEnd'} minTickGap={20} />
                             <YAxis tickLine={false} axisLine={false} tick={tickFont} domain={['auto', 'auto']} />
                             <Tooltip content={<CustomTooltip />} />
                             <Line type="monotone" dataKey="bodyFatPercent" name="체지방률(%)" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: '#ef4444' }} />
@@ -136,11 +178,11 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                         기초대사량 (kcal)
                     </div>
                     <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '8px' }}>
-                        <div style={{ minWidth: chartData.length > 6 ? `${chartData.length * 45}px` : '100%', height: 160 }}>
+                        <div style={{ minWidth: getChartMinWidth(), height: 160 }}>
                             <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                            <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} />
+                            <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} interval={viewMode === 'fit' ? 'preserveStartEnd' : 'preserveEnd'} minTickGap={20} />
                             <YAxis tickLine={false} axisLine={false} tick={tickFont} domain={['auto', 'auto']} />
                             <Tooltip content={<CustomTooltip />} />
                             <Line type="monotone" dataKey="basalMetabolicRate" name="기초대사량" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3, fill: '#8b5cf6' }} />
@@ -156,11 +198,11 @@ export default function HealthCharts({ chartData }: HealthChartsProps) {
                         BMI · 복부지방률
                     </div>
                     <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '8px' }}>
-                        <div style={{ minWidth: chartData.length > 6 ? `${chartData.length * 45}px` : '100%', height: 160 }}>
+                        <div style={{ minWidth: getChartMinWidth(), height: 160 }}>
                             <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData} margin={{ top: 10, right: 10, left: -30, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                            <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} />
+                            <XAxis dataKey="date" tickLine={false} axisLine={false} tick={tickFont} interval={viewMode === 'fit' ? 'preserveStartEnd' : 'preserveEnd'} minTickGap={20} />
                             <YAxis yAxisId="left" tickLine={false} axisLine={false} tick={tickFont} domain={['auto', 'auto']} />
                             <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} tick={{ ...tickFont, fill: '#f59e0b' }} domain={[0.8, 1.0]} />
                             <Tooltip content={<CustomTooltip />} />
