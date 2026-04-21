@@ -162,7 +162,35 @@ export default function WeeklyReport() {
                 body: JSON.stringify({ summary }),
             });
             const data = await res.json();
-            setAiFeedback(data.feedback || data.error || 'AI 피드백을 생성하지 못했습니다.');
+            
+            if (res.ok && data.executiveSummary) {
+                const feedbackStr = `📌 전체 요약
+${data.executiveSummary}
+
+📊 체성분 분석
+${data.bodyCompositionAnalysis}
+
+📈 추이 및 전망
+${data.trendAnalysis}
+
+⚠️ 주의 및 위험 평가
+${data.riskAssessment}
+
+💡 실천 권고사항
+${data.recommendations?.map((r: string) => `• ${r}`).join('\n')}
+
+🥗 식단 가이드
+${data.nutritionGuidance}
+
+🏋️ 운동 가이드
+${data.exerciseGuidance}
+
+🎯 추천 목표
+${data.goals?.map((g: string) => `• ${g}`).join('\n')}`;
+                setAiFeedback(feedbackStr);
+            } else {
+                setAiFeedback(data.error || data.feedback || 'AI 피드백을 생성하지 못했습니다.');
+            }
         } catch {
             setAiFeedback('AI 피드백 생성에 실패했습니다. 나중에 다시 시도해주세요.');
         } finally {
