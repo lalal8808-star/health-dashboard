@@ -7,6 +7,7 @@ import {
     saveWorkoutEntry,
     deleteWorkoutEntry,
     getMonthlyWorkoutLogs,
+    getRecentWorkoutNames,
 } from '@/app/lib/workout-storage';
 import { Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -31,6 +32,7 @@ export default function WorkoutDiary({ onGoToUpload: _onGoToUpload, syncVersion 
     const [showForm, setShowForm] = useState(false);
     const [workoutLog, setWorkoutLog] = useState(() => getWorkoutLogByDate(new Date().toISOString().split('T')[0]));
     const [isMobile, setIsMobile] = useState(false);
+    const [recentWorkoutNames, setRecentWorkoutNames] = useState<string[]>([]);
 
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth < 640);
@@ -97,6 +99,7 @@ export default function WorkoutDiary({ onGoToUpload: _onGoToUpload, syncVersion 
         };
         saveWorkoutEntry(selectedDate, entry);
         refreshLog(selectedDate);
+        setRecentWorkoutNames(getRecentWorkoutNames());
         setShowForm(false);
         form.reset();
     };
@@ -268,7 +271,12 @@ export default function WorkoutDiary({ onGoToUpload: _onGoToUpload, syncVersion 
                             {workoutLog.entries.length}개 운동
                         </span>
                     )}
-                    <button className="btn btn-primary btn-sm" onClick={() => setShowForm(!showForm)}>
+                    <button className="btn btn-primary btn-sm" onClick={() => {
+                        setShowForm(!showForm);
+                        if (!showForm) {
+                            setRecentWorkoutNames(getRecentWorkoutNames());
+                        }
+                    }}>
                         <Plus size={16} /> 운동 추가
                     </button>
                 </div>
@@ -286,7 +294,14 @@ export default function WorkoutDiary({ onGoToUpload: _onGoToUpload, syncVersion 
                                 style={inputStyle}
                                 placeholder="예: 벤치프레스, 러닝, 스쿼트"
                                 autoFocus
+                                list="recent-workouts"
+                                autoComplete="off"
                             />
+                            <datalist id="recent-workouts">
+                                {recentWorkoutNames.map(name => (
+                                    <option key={name} value={name} />
+                                ))}
+                            </datalist>
                         </div>
                         <div style={{ gridColumn: '1 / -1' }}>
                             <label style={labelStyle}>운동시간</label>

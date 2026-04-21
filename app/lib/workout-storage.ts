@@ -15,6 +15,23 @@ export function getWorkoutLogs(): WorkoutLog[] {
     }
 }
 
+export function getRecentWorkoutNames(): string[] {
+    const logs = getWorkoutLogs();
+    const names = new Set<string>();
+    const sortedLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date));
+    for (const log of sortedLogs) {
+        // Iterate entries backwards to prioritize newest added within a day
+        for (let i = log.entries.length - 1; i >= 0; i--) {
+            const entry = log.entries[i];
+            if (entry.name && entry.name.trim() !== '') {
+                names.add(entry.name.trim());
+            }
+            if (names.size >= 30) return Array.from(names);
+        }
+    }
+    return Array.from(names);
+}
+
 export function getWorkoutLogByDate(date: string): WorkoutLog | null {
     const logs = getWorkoutLogs();
     return logs.find(l => l.date === date) || null;
