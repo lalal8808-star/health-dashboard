@@ -42,9 +42,10 @@ const MEAL_CONFIG: Record<MealKey, { emoji: string; label: string; color: string
 
 const MEAL_ORDER: MealKey[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
-type UploadStatus = 'pending' | 'analyzing' | 'done' | 'error';
+type UploadStatus = 'added' | 'pending' | 'analyzing' | 'done' | 'error';
 interface PendingFile {
     id: string; file: File; preview: string;
+    description: string;
     status: UploadStatus; errorMsg?: string;
 }
 
@@ -177,6 +178,9 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
             const compressed = await compressImage(pf.file);
             const formData = new FormData();
             formData.append('image', compressed, 'image.jpg');
+            if (pf.description?.trim()) {
+                formData.append('description', pf.description.trim());
+            }
             const res = await fetch('/api/food-analyze', { method: 'POST', body: formData });
             const data = await res.json();
             if (data.success) {
@@ -219,7 +223,8 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
             ...prev,
             ...imgs.map(file => ({
                 id: `up-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                file, preview: URL.createObjectURL(file), status: 'pending' as UploadStatus,
+                file, preview: URL.createObjectURL(file), status: 'added' as UploadStatus,
+                description: '',
             })),
         ]);
     }, []);
@@ -993,26 +998,48 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
                         </span>
                         {hasDoneOrError && <button className="btn btn-secondary btn-sm" onClick={clearDone} style={{ fontSize: '11px' }}>완료 지우기</button>}
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px' }}>
                         {pendingFiles.map(pf => (
-                            <div key={pf.id} style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden' }}>
+                            <div key={pf.id} style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'var(--bg-secondary)', border: '1px solid var(--border-glass)' }}>
+                                <div style={{ position: 'relative', width: '100%', aspectRatio: '1' }}>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={pf.preview} alt={pf.file.name} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block', opacity: pf.status === 'done' ? 0.6 : 1 }} />
+                                <img src={pf.preview} alt={pf.file.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: pf.status === 'done' ? 0.6 : 1 }} />
                                 <div style={{
                                     position: 'absolute', inset: 0,
-                                    background: pf.status === 'analyzing' ? 'rgba(59,130,246,0.4)' : pf.status === 'done' ? 'rgba(16,185,129,0.3)' : pf.status === 'error' ? 'rgba(239,68,68,0.3)' : 'rgba(0,0,0,0.15)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: pf.status === 'analyzing' ? 'rgba(59,130,246,0.4)' : pf.status === 'done' ? 'rgba(16,185,129,0.3)' : pf.status === 'error' ? 'rgba(239,68,68,0.3)' : pf.status === 'pending' ? 'rgba(0,0,0,0.15)' : 'transparent',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none'
                                 }}>
                                     {statusIcon(pf.status)}
                                 </div>
-                                {pf.status !== 'analyzing' && (
-                                    <button onClick={e => { e.stopPropagation(); removePending(pf.id); }} style={{ position: 'absolute', top: '4px', right: '4px', width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                                {pf.status !== 'analyzing' && pf.status !== 'pending' && (
+                                    <button onClick={e => { e.stopPropagation(); removePending(pf.id); }} style={{ position: 'absolute', top: '4px', right: '4px', width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>×</button>
                                 )}
+                                {pf.status !== 'added' && pf.status !== 'pending' && (
                                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.55)', padding: '3px 4px', textAlign: 'center' }}>
                                     <span style={{ fontSize: '10px', color: pf.status === 'done' ? '#10b981' : pf.status === 'error' ? '#ef4444' : pf.status === 'analyzing' ? '#3b82f6' : 'var(--text-tertiary)', fontWeight: 600 }}>
                                         {pf.status === 'pending' ? '대기' : pf.status === 'analyzing' ? '분석 중…' : pf.status === 'done' ? '완료' : '오류'}
                                     </span>
                                 </div>
+                                )}
+                                </div>
+                                {(pf.status === 'added' || pf.status === 'pending') && (
+                                    <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <input 
+                                            style={{ width: '100%', fontSize: '11px', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--border-glass)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+                                            placeholder="예: 절반만 먹음"
+                                            value={pf.description}
+                                            onChange={e => setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, description: e.target.value } : f))}
+                                            disabled={pf.status === 'pending'}
+                                        />
+                                        <button 
+                                            onClick={() => setPendingFiles(prev => prev.map(f => f.id === pf.id ? { ...f, status: 'pending' } : f))}
+                                            disabled={pf.status === 'pending'}
+                                            style={{ width: '100%', padding: '6px', background: 'var(--accent-blue)', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: pf.status === 'pending' ? 'not-allowed' : 'pointer', opacity: pf.status === 'pending' ? 0.5 : 1 }}
+                                        >
+                                            {pf.status === 'pending' ? '대기 중...' : '📸 AI 분석'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>

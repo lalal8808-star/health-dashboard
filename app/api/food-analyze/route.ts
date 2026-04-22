@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
 
         const formData = await request.formData();
         const imageFile = formData.get('image') as File;
+        const additionalDescription = formData.get('description') as string | null;
 
         if (!imageFile) {
             return NextResponse.json({ success: false, error: 'No image provided' }, { status: 400 });
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-        const prompt = `이 음식 사진을 분석하세요. 다음 JSON 형식으로만 응답해 주세요. 다른 텍스트 없이 JSON만 반환하세요.
+        let prompt = `이 음식 사진을 분석하세요. 다음 JSON 형식으로만 응답해 주세요. 다른 텍스트 없이 JSON만 반환하세요.
 
 {
   "name": "음식 이름 (한국어)",
@@ -37,6 +38,10 @@ export async function POST(request: NextRequest) {
 - 가능한 정확한 1인분 기준으로 추정
 - 숫자는 정수로 반환
 - 한국 음식이면 한국어 음식명 사용`;
+
+        if (additionalDescription) {
+            prompt += `\n\n[중요] 사용자 추가 설명: "${additionalDescription}"\n이 설명을 최우선으로 반영하여 섭취 비율, 메뉴 변경, 재료 가감 등을 고려해 영양소와 칼로리를 계산하세요.`;
+        }
 
         const result = await model.generateContent([
             { inlineData: { data: base64, mimeType } },
