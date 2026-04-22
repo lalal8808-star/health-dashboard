@@ -1017,7 +1017,7 @@ export default function FoodDiary({ onGoToUpload: _onGoToUpload, syncVersion }: 
                                 {pf.status !== 'added' && pf.status !== 'pending' && (
                                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.55)', padding: '3px 4px', textAlign: 'center' }}>
                                     <span style={{ fontSize: '10px', color: pf.status === 'done' ? '#10b981' : pf.status === 'error' ? '#ef4444' : pf.status === 'analyzing' ? '#3b82f6' : 'var(--text-tertiary)', fontWeight: 600 }}>
-                                        {pf.status === 'pending' ? '대기' : pf.status === 'analyzing' ? '분석 중…' : pf.status === 'done' ? '완료' : '오류'}
+                                        {pf.status === 'analyzing' ? '분석 중…' : pf.status === 'done' ? '완료' : '오류'}
                                     </span>
                                 </div>
                                 )}
